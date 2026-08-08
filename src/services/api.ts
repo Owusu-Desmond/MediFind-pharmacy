@@ -135,6 +135,27 @@ export const api = {
     removeToken();
   },
 
+  async forgotPassword(email: string) {
+    return fetchApi<{ message: string; reset_token: string; email: string }>(
+      "/api/auth/forgot-password",
+      {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      }
+    );
+  },
+
+  async resetPassword(email: string, newPassword: string, resetToken?: string) {
+    return fetchApi<{ message: string }>(
+      "/api/auth/reset-password",
+      {
+        method: "POST",
+        body: JSON.stringify({ email, new_password: newPassword, reset_token: resetToken }),
+      }
+    );
+  },
+
+
   async getMe() {
     return fetchApi<{
       id: number;
