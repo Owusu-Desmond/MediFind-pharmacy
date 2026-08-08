@@ -2,24 +2,22 @@
 
 import React from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useApp } from "@/context/AppContext";
-import { 
-  ArrowLeft, 
-  Pill, 
-  Tag, 
-  Building, 
-  DollarSign, 
-  Boxes, 
-  Calendar,
+import {
+  ArrowLeft,
+  Pill,
+  Building,
+  Info,
   AlertTriangle,
   History,
-  ShieldCheck
+  Activity,
+  CheckCircle,
+  FileText
 } from "lucide-react";
 
 export default function MedicineDetailsPage() {
   const params = useParams();
-  const router = useRouter();
   const { medicines, reservations } = useApp();
   const id = params.id as string;
 
@@ -38,18 +36,30 @@ export default function MedicineDetailsPage() {
   }
 
   // Filter reservations containing this medicine
-  const associatedReservations = reservations.filter((res) => 
-    res.medicines.some((m) => 
-      m.name.toLowerCase().includes(medicine.name.toLowerCase()) || 
+  const associatedReservations = reservations.filter((res) =>
+    res.medicines.some((m) =>
+      m.name.toLowerCase().includes(medicine.name.toLowerCase()) ||
       medicine.name.toLowerCase().includes(m.name.toLowerCase())
     )
   );
 
-  const isExpiredSoon = new Date(medicine.expiryDate) < new Date("2027-01-01");
+  const parseListItems = (text?: string): string[] => {
+    if (!text) return [];
+    return text
+      .split(/\n|•|\\n/)
+      .map((item) => item.replace(/^[-*•]\s*/, "").trim())
+      .filter(Boolean);
+  };
+
+  const tagList = (medicine.tags || "Oral Tablet, Fast Acting, FDA Approved").split(",").map(t => t.trim());
+  const dosageList = parseListItems(medicine.dosageInstructions || medicine.dosage || "Adults & Children > 12y:\n1-2 tablets every 4-6 hours as required. Do not exceed 8 tablets in 24 hours.");
+  const precautionsList = parseListItems(medicine.precautions || "Avoid alcohol consumption while taking this medication.\nDo not take with other paracetamol-containing products.");
+  const sideEffectsList = parseListItems(medicine.sideEffects || "Common side effects are rare but may include allergic reactions (skin rash, swelling), or blood disorders. Consult a doctor if you experience any unusual symptoms.");
+
 
   return (
     <div className="space-y-8 animate-in fade-in duration-200">
-      
+
       {/* Back button */}
       <div>
         <Link
@@ -63,101 +73,117 @@ export default function MedicineDetailsPage() {
 
       {/* Main content grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
+
         {/* Left Side: Overview spec sheet */}
         <div className="lg:col-span-2 space-y-6">
-          
+
           {/* Header Specs Card */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex items-start gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-teal-50 text-primary flex items-center justify-center shrink-0 border border-teal-100">
-              <Pill size={32} />
-            </div>
-            <div className="space-y-1">
-              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
-                medicine.status === "In Stock"
+          <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-4">
+                {medicine.imageUrl ? (
+                  <img src={medicine.imageUrl} alt={medicine.name} className="w-20 h-20 rounded-2xl object-cover border border-slate-200 shrink-0" />
+                ) : (
+                  <div className="w-20 h-20 rounded-2xl bg-teal-50 text-primary flex items-center justify-center shrink-0 border border-teal-100">
+                    <Pill size={36} />
+                  </div>
+                )}
+                <div>
+                  <h1 className="text-2xl font-black text-slate-800 tracking-tight leading-tight">
+                    {medicine.name} {medicine.dosage && <span className="text-teal-700 font-extrabold text-xl">({medicine.dosage})</span>}
+                  </h1>
+                  <p className="text-xs text-slate-400 font-semibold flex items-center gap-1.5 mt-1">
+                    <Building size={14} className="text-slate-400" /> {medicine.manufacturer || "Ridge Pharmacy"}
+                  </p>
+                </div>
+              </div>
+
+              <span className={`px-3 py-1 rounded-full text-xs font-extrabold border ${medicine.status === "In Stock"
                   ? "bg-emerald-50 text-emerald-700 border-emerald-100"
                   : medicine.status === "Low Stock"
-                  ? "bg-amber-50 text-amber-700 border-amber-100"
-                  : "bg-rose-50 text-rose-700 border-rose-100"
-              }`}>
-                {medicine.status}
+                    ? "bg-amber-50 text-amber-700 border-amber-100"
+                    : "bg-rose-50 text-rose-700 border-rose-100"
+                }`}>
+                ✓ {medicine.status} ({medicine.stockQuantity} available)
               </span>
-              <h1 className="text-2xl font-black text-slate-800 tracking-tight leading-none mt-1.5">{medicine.name} {medicine.dosage}</h1>
-              <p className="text-xs text-slate-400 font-semibold flex items-center gap-1.5 pt-0.5">
-                <Building size={14} /> Manufactured by: {medicine.manufacturer}
+            </div>
+
+            {/* Price Box */}
+            <div className="bg-teal-50/60 border border-teal-100/80 rounded-2xl p-4">
+              <span className="text-[11px] font-extrabold text-teal-800 tracking-wider uppercase block">PRICE</span>
+              <span className="text-3xl font-black text-teal-900 mt-0.5 block">
+                GH¢ {medicine.price.toFixed(2)}
+              </span>
+            </div>
+
+            {/* Badges / Tags */}
+            <div className="flex flex-wrap gap-2 pt-1">
+              {tagList.map((tag, idx) => (
+                <span key={idx} className="px-3.5 py-1 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold border border-slate-200/60 flex items-center gap-1.5">
+                  <CheckCircle size={14} className="text-teal-600" />
+                  {tag}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Description Section */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-3">
+            <div className="flex items-center gap-2 text-teal-800">
+              <Info size={18} className="text-teal-700" />
+              <h3 className="font-extrabold text-slate-800 text-base">Description</h3>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed bg-slate-50/60 p-4 rounded-2xl border border-slate-100/80">
+              {medicine.description || "Effective for relief of mild to moderate pain including headache, migraine, neuralgia, toothache, sore throat, period pain, and relief of symptoms of flu and fever."}
+            </p>
+          </div>
+
+          {/* Dosage Section */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-3">
+            <div className="flex items-center gap-2 text-teal-800">
+              <FileText size={18} className="text-teal-700" />
+              <h3 className="font-extrabold text-slate-800 text-base">Dosage</h3>
+            </div>
+            <div className="bg-slate-50/60 p-4 rounded-2xl border border-slate-100/80 space-y-1">
+              <p className="text-xs text-slate-800 font-extrabold">
+                {medicine.dosage || "Adults & Children > 12y:"}
               </p>
             </div>
           </div>
 
-          {/* Detailed Info Cards */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-6">
-            <h3 className="font-extrabold text-slate-800 text-md border-b border-slate-100 pb-3">Technical Specifications</h3>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              
-              {/* Category */}
-              <div className="flex items-center gap-3.5">
-                <div className="w-10 h-10 rounded-xl bg-slate-50 text-slate-500 flex items-center justify-center shrink-0 border border-slate-100">
-                  <Tag size={18} />
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Therapeutic Category</span>
-                  <span className="text-sm font-bold text-slate-700">{medicine.category}</span>
-                </div>
-              </div>
-
-              {/* Price */}
-              <div className="flex items-center gap-3.5">
-                <div className="w-10 h-10 rounded-xl bg-slate-50 text-slate-500 flex items-center justify-center shrink-0 border border-slate-100">
-                  <DollarSign size={18} />
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Retail Price (pack)</span>
-                  <span className="text-sm font-extrabold text-slate-700">GH¢ {medicine.price.toFixed(2)}</span>
-                </div>
-              </div>
-
-              {/* Stock */}
-              <div className="flex items-center gap-3.5">
-                <div className="w-10 h-10 rounded-xl bg-slate-50 text-slate-500 flex items-center justify-center shrink-0 border border-slate-100">
-                  <Boxes size={18} />
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Available Stock Volume</span>
-                  <span className="text-sm font-bold text-slate-700">{medicine.stockQuantity} Packs available</span>
-                </div>
-              </div>
-
-              {/* Expiry */}
-              <div className="flex items-center gap-3.5">
-                <div className="w-10 h-10 rounded-xl bg-slate-50 text-slate-500 flex items-center justify-center shrink-0 border border-slate-100">
-                  <Calendar size={18} />
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Batch Expiration Schedule</span>
-                  <span className={`text-sm font-bold flex items-center gap-1.5 ${
-                    isExpiredSoon ? "text-rose-600 font-extrabold" : "text-slate-700"
-                  }`}>
-                    {medicine.expiryDate}
-                    {isExpiredSoon && <AlertTriangle size={14} className="text-rose-500 animate-bounce" />}
-                  </span>
-                </div>
-              </div>
+          {/* Precautions Section */}
+          <div className="bg-rose-50/30 p-6 rounded-3xl border border-rose-100 shadow-sm space-y-3">
+            <div className="flex items-center gap-2 text-rose-700">
+              <AlertTriangle size={18} className="text-rose-600" />
+              <h3 className="font-extrabold text-rose-800 text-base">Precautions</h3>
             </div>
-
-            {/* Description */}
-            <div className="pt-4 border-t border-slate-100 space-y-2">
-              <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Clinical Description & Indications</h4>
-              <p className="text-xs text-slate-600 leading-relaxed bg-slate-50/50 p-4 rounded-xl border border-slate-100/60">
-                {medicine.description || "No clinical description uploaded. Standard pharmacy guidelines apply for dispersing."}
-              </p>
+            <div className="bg-white/80 p-4 rounded-2xl border border-rose-100 space-y-2">
+              {(medicine.precautions || "Avoid alcohol consumption while taking this medication.\nDo not take with other paracetamol-containing products.")
+                .split("\n")
+                .map((item, idx) => (
+                  <p key={idx} className="text-xs text-rose-900 font-semibold flex items-start gap-2">
+                    <span className="text-rose-500 font-bold">•</span> {item}
+                  </p>
+                ))}
             </div>
           </div>
+
+          {/* Side Effects Section */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-3">
+            <div className="flex items-center gap-2 text-teal-800">
+              <Activity size={18} className="text-teal-700" />
+              <h3 className="font-extrabold text-slate-800 text-base">Side Effects</h3>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed bg-slate-50/60 p-4 rounded-2xl border border-slate-100/80">
+              {medicine.sideEffects || "Common side effects are rare but may include allergic reactions (skin rash, swelling), or blood disorders. Consult a doctor if you experience any unusual symptoms."}
+            </p>
+          </div>
+
         </div>
 
         {/* Right Side: Associated Reservation Logs */}
         <div className="space-y-6">
-          <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+          <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-4">
             <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
               <History className="text-primary" size={18} />
               <h3 className="font-extrabold text-slate-800 text-md">Linked Reservations</h3>
@@ -176,15 +202,14 @@ export default function MedicineDetailsPage() {
                   >
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-bold text-slate-400">{res.id}</span>
-                      <span className={`px-2 py-0.5 rounded-md text-[9px] font-extrabold border ${
-                        res.status === "Pending"
+                      <span className={`px-2 py-0.5 rounded-md text-[9px] font-extrabold border ${res.status === "Pending"
                           ? "bg-amber-50 text-amber-700 border-amber-100"
                           : res.status === "Confirmed"
-                          ? "bg-teal-50 text-primary border-teal-100"
-                          : res.status === "Picked Up"
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-100"
-                          : "bg-rose-50 text-rose-700 border-rose-100"
-                      }`}>
+                            ? "bg-teal-50 text-primary border-teal-100"
+                            : res.status === "Picked Up"
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                              : "bg-rose-50 text-rose-700 border-rose-100"
+                        }`}>
                         {res.status}
                       </span>
                     </div>
@@ -212,3 +237,4 @@ export default function MedicineDetailsPage() {
     </div>
   );
 }
+

@@ -72,10 +72,17 @@ export interface ApiInventoryItem {
     name: string;
     generic_name?: string;
     dosage?: string;
+    dosage_instructions?: string;
     category?: string;
     description?: string;
     manufacturer?: string;
+    precautions?: string;
+    side_effects?: string;
+    tags?: string;
+    image_url?: string;
   };
+
+
 }
 
 export interface ApiReservationItem {
@@ -244,14 +251,36 @@ export const api = {
     return fetchApi<ApiInventoryItem[]>(`/api/pharmacies/${pharmacyId}/inventory`);
   },
 
+  async uploadMedicineImage(file: File) {
+    const formData = new FormData();
+    formData.append("file", file);
+    const token = localStorage.getItem("pharmacy_token");
+    const response = await fetch(`${API_BASE_URL}/api/pharmacies/upload-medicine-image`, {
+      method: "POST",
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: formData,
+    });
+    if (!response.ok) {
+      throw new Error("Failed to upload medicine image");
+    }
+    return response.json() as Promise<{ url: string; filename: string }>;
+  },
+
   async addInventoryItem(
     pharmacyId: number,
     itemData: {
       name: string;
       dosage?: string;
+      dosage_instructions?: string;
       category?: string;
       description?: string;
       manufacturer?: string;
+      precautions?: string;
+      side_effects?: string;
+      tags?: string;
+      image_url?: string;
       batch_number?: string;
       stock_quantity: number;
       price: number;
@@ -270,9 +299,14 @@ export const api = {
     itemData: Partial<{
       name: string;
       dosage: string;
+      dosage_instructions: string;
       category: string;
       description: string;
       manufacturer: string;
+      precautions: string;
+      side_effects: string;
+      tags: string;
+      image_url: string;
       batch_number: string;
       stock_quantity: number;
       price: number;
@@ -284,6 +318,8 @@ export const api = {
       body: JSON.stringify(itemData),
     });
   },
+
+
 
   async deleteInventoryItem(pharmacyId: number, inventoryId: number) {
     return fetchApi<{ message: string }>(`/api/pharmacies/${pharmacyId}/inventory/${inventoryId}`, {

@@ -232,8 +232,9 @@ export default function DashboardPage() {
                   className="flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:bg-slate-50 transition-colors"
                 >
                   <div>
-                    <h4 className="text-xs font-bold text-slate-700">{med.name} {med.dosage}</h4>
-                    <span className="text-[10px] font-semibold text-slate-400">Batch: {med.batchNumber}</span>
+                    <h4 className="text-xs font-bold text-slate-700">{med.name}</h4>
+                    <span className="text-[10px] font-semibold text-slate-400">{med.manufacturer || "Ridge Pharmacy"}</span>
+
                   </div>
                   <div className="text-right">
                     <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${

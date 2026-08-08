@@ -6,15 +6,20 @@ import { api, getToken, ApiInventoryItem, ApiReservation } from "@/services/api"
 export interface Medicine {
   id: string; // string representation of Inventory ID
   name: string;
-  dosage: string;
-  batchNumber: string;
+  dosage: string; // Dosage Strength (e.g. 500mg, 100mg/5ml)
+  dosageInstructions?: string; // Detailed Schedule & Directions for use
   stockQuantity: number;
   price: number;
-  category: string;
-  expiryDate: string;
-  status: "In Stock" | "Low Stock" | "Out of Stock";
   description: string;
+  precautions?: string;
+  sideEffects?: string;
+  tags?: string;
+  imageUrl?: string;
   manufacturer: string;
+  category?: string;
+  batchNumber?: string;
+  expiryDate?: string;
+  status: "In Stock" | "Low Stock" | "Out of Stock";
 }
 
 export interface Reservation {
@@ -99,15 +104,20 @@ const mapApiInventoryToMedicine = (inv: ApiInventoryItem): Medicine => {
   return {
     id: String(inv.id),
     name: inv.medicine?.name || "Unknown Medicine",
-    dosage: inv.medicine?.dosage || "",
-    batchNumber: inv.batch_number || `B-${inv.id}`,
+    dosage: inv.medicine?.dosage || "500mg",
+    dosageInstructions: inv.medicine?.dosage_instructions || "",
     stockQuantity: stockQty,
     price: inv.price ?? 0.0,
-    category: inv.medicine?.category || "General",
-    expiryDate: inv.expiry_date ? String(inv.expiry_date).split("T")[0] : "2028-12-31",
     status: computedStatus,
     description: inv.medicine?.description || "",
-    manufacturer: inv.medicine?.manufacturer || "Pharma Ghana Ltd",
+    precautions: inv.medicine?.precautions || "",
+    sideEffects: inv.medicine?.side_effects || "",
+    tags: inv.medicine?.tags || "",
+    imageUrl: inv.medicine?.image_url || "",
+    manufacturer: inv.medicine?.manufacturer || "Ridge Pharmacy",
+    category: inv.medicine?.category || "General",
+    batchNumber: inv.batch_number || `B-${inv.id}`,
+    expiryDate: inv.expiry_date ? String(inv.expiry_date).split("T")[0] : "",
   };
 };
 
@@ -116,25 +126,25 @@ const mapApiReservationToReservation = (res: ApiReservation): Reservation => {
   const rawStatus = (res.status || "").toLowerCase();
   if (rawStatus.includes("approved") || rawStatus.includes("confirmed")) {
     mappedStatus = "Confirmed";
-  } else if (rawStatus.includes("collected") || rawStatus.includes("picked up") || rawStatus.includes("delivered")) {
+  } else if (rawStatus.includes("collected") || rawStatus.includes("picked") || rawStatus.includes("delivered")) {
     mappedStatus = "Picked Up";
-  } else if (rawStatus.includes("cancelled") || rawStatus.includes("rejected")) {
+  } else if (rawStatus.includes("cancel")) {
     mappedStatus = "Cancelled";
   }
 
-  const dt = res.date ? new Date(res.date) : new Date();
-  const dateStr = dt.toISOString().split("T")[0];
-  const timeStr = dt.toTimeString().slice(0, 5);
+  const firstMed = res.items?.[0]?.medicine?.name || "Prescription Item";
 
   return {
     id: res.ref_number || `RES-${res.id}`,
     rawId: res.id,
     patientName: res.patient?.name || `Patient #${res.patient_id}`,
     patientPhone: res.patient?.phone || "+233 55 456 7890",
-    date: dateStr,
-    time: timeStr,
+    date: res.date ? String(res.date).split("T")[0] : new Date().toISOString().split("T")[0],
+
+
+    time: "10:00 AM",
     medicines: (res.items || []).map((item) => ({
-      name: item.medicine?.dosage ? `${item.medicine.name} ${item.medicine.dosage}` : (item.medicine?.name || "Medicine"),
+      name: item.medicine?.name || firstMed,
       quantity: item.quantity,
       price: item.price,
     })),
@@ -158,6 +168,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const loadBackendData = useCallback(async () => {
     try {
+      setLoading(true);
       const me = await api.getMe();
       setUser({ email: me.email, name: me.name, id: me.id });
 
@@ -225,9 +236,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const created = await api.addInventoryItem(profile.id, {
         name: med.name,
         dosage: med.dosage,
+        dosage_instructions: med.dosageInstructions,
         category: med.category,
         description: med.description,
         manufacturer: med.manufacturer,
+        precautions: med.precautions,
+        side_effects: med.sideEffects,
+        tags: med.tags,
+        image_url: med.imageUrl,
         batch_number: med.batchNumber,
         stock_quantity: med.stockQuantity,
         price: med.price,
@@ -243,7 +259,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             id: `notif-${Date.now()}`,
             type: newMed.stockQuantity === 0 ? "warning" : "info",
             title: newMed.stockQuantity === 0 ? "Out of Stock Warning" : "Low Stock Alert",
-            message: `${newMed.name} ${newMed.dosage} has been added with ${newMed.stockQuantity} remaining packs.`,
+            message: `${newMed.name} has been added with ${newMed.stockQuantity} remaining packs.`,
             time: "Just now",
             read: false,
           },
@@ -265,9 +281,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const updated = await api.updateInventoryItem(profile.id, inventoryId, {
         name: updatedFields.name,
         dosage: updatedFields.dosage,
+        dosage_instructions: updatedFields.dosageInstructions,
         category: updatedFields.category,
         description: updatedFields.description,
         manufacturer: updatedFields.manufacturer,
+        precautions: updatedFields.precautions,
+        side_effects: updatedFields.sideEffects,
+        tags: updatedFields.tags,
+        image_url: updatedFields.imageUrl,
         batch_number: updatedFields.batchNumber,
         stock_quantity: updatedFields.stockQuantity,
         price: updatedFields.price,
@@ -281,6 +302,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       throw err;
     }
   };
+
 
   const deleteMedicine = async (id: string) => {
     if (!profile.id) return;
