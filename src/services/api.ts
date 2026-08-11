@@ -337,4 +337,36 @@ export const api = {
       method: "PATCH",
     });
   },
+
+  async changePassword(currentPassword: string, newPassword: string) {
+    return fetchApi<{ message: string }>("/api/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({
+        current_password: currentPassword,
+        new_password: newPassword,
+      }),
+    });
+  },
+
+  async getPharmacyStaff(pharmacyId: number) {
+    return fetchApi<Array<{ id: number; user_id: number; name: string; email: string; phone?: string; role: string }>>(
+      `/api/pharmacies/${pharmacyId}/staff`
+    );
+  },
+
+  async addPharmacyStaff(pharmacyId: number, staffData: { name: string; email: string; password: string; phone?: string }) {
+    return fetchApi<{ id: number; user_id: number; name: string; email: string; phone?: string; role: string }>(
+      `/api/pharmacies/${pharmacyId}/staff`,
+      {
+        method: "POST",
+        body: JSON.stringify(staffData),
+      }
+    );
+  },
+
+  async deletePharmacyStaff(pharmacyId: number, staffId: number) {
+    return fetchApi<{ message: string }>(`/api/pharmacies/${pharmacyId}/staff/${staffId}`, {
+      method: "DELETE",
+    });
+  },
 };
