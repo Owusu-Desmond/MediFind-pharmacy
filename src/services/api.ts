@@ -197,6 +197,7 @@ export const api = {
     email?: string;
     delivery_offered?: boolean;
     opening_hours?: string;
+    gps_address?: string;
     certificate_url?: string;
   }) {
     return fetchApi("/api/pharmacies/", {

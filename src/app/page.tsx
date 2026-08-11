@@ -4,13 +4,26 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/context/AppContext";
-import { Activity, ShieldCheck, Mail, Lock, ArrowRight } from "lucide-react";
+import { 
+  Activity, 
+  ShieldCheck, 
+  Mail, 
+  Lock, 
+  Eye, 
+  EyeOff, 
+  ArrowRight, 
+  BadgeCheck, 
+  Headphones, 
+  Building2,
+  CheckCircle2
+} from "lucide-react";
 
 export default function LoginPage() {
   const { login } = useApp();
   const router = useRouter();
   const [email, setEmail] = useState("central@ghanapharmacy.gov.gh");
   const [password, setPassword] = useState("password");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -20,7 +33,7 @@ export default function LoginPage() {
     setLoading(true);
 
     if (!email || !password) {
-      setError("Please fill in all fields.");
+      setError("Please fill in all required fields.");
       setLoading(false);
       return;
     }
@@ -35,166 +48,208 @@ export default function LoginPage() {
     }
   };
 
-
   return (
-    <div className="min-h-screen w-screen bg-slate-50 flex items-stretch overflow-hidden select-none">
-      {/* Left Column: Form */}
-      <div className="w-full lg:w-[45%] bg-white flex flex-col justify-center px-8 sm:px-16 md:px-24 py-12 relative z-10 border-r border-slate-100 shadow-xl">
-        {/* Mobile Header Banner */}
-        <div className="absolute top-8 left-8 sm:left-16 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white shadow-md shadow-primary/20">
-            <Activity size={22} className="stroke-[2.5]" />
+    <main className="min-h-screen bg-[#f8f9ff] text-slate-800 flex items-center justify-center p-4 md:p-8 relative overflow-hidden select-none">
+      {/* Atmospheric Background Elements */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute -top-[10%] -right-[5%] w-[40%] h-[60%] bg-teal-100/60 rounded-full blur-[120px] opacity-50" />
+        <div className="absolute -bottom-[10%] -left-[5%] w-[35%] h-[50%] bg-teal-200/50 rounded-full blur-[100px] opacity-40" />
+      </div>
+
+      {/* Main Login Card Shell */}
+      <div className="w-full max-w-[1100px] grid md:grid-cols-2 bg-white rounded-lg border border-slate-200 shadow-lg overflow-hidden relative z-10">
+        
+        {/* Left Side: Branding / Visual Area */}
+        <div className="hidden md:flex flex-col justify-between p-12 bg-[#005c55] text-white relative overflow-hidden">
+          {/* Subtle Background Pattern */}
+          <div className="absolute inset-0 opacity-10 pointer-events-none">
+            <svg height="100%" width="100%" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="1" />
+                </pattern>
+              </defs>
+              <rect width="100%" height="100%" fill="url(#grid)" />
+            </svg>
           </div>
-          <span className="font-extrabold text-xl tracking-tight text-slate-800 font-headline">MediFind</span>
+
+          <div className="z-10">
+            {/* Logo */}
+            <div className="flex items-center gap-3 mb-12">
+              <div className="w-10 h-10 bg-teal-200/30 rounded flex items-center justify-center text-teal-100 border border-teal-200/30">
+                <Activity size={24} className="stroke-[2.5]" />
+              </div>
+              <h1 className="text-xl font-black tracking-tight font-headline">MediFind Ghana</h1>
+            </div>
+
+            {/* Headline & Description */}
+            <div className="space-y-6">
+              <h2 className="text-3xl font-extrabold text-white leading-tight font-headline">
+                Digital Healthcare for Every Community.
+              </h2>
+              <p className="text-sm text-teal-100/90 leading-relaxed max-w-sm">
+                Streamline your inventory, manage prescriptions, and reach more patients with Ghana&apos;s most reliable pharmacy management suite.
+              </p>
+            </div>
+          </div>
+
+          {/* Testimonial / Social Proof Card */}
+          <div className="mt-auto z-10 pt-8">
+            <div className="p-6 bg-white/10 backdrop-blur-md rounded-xl border border-white/20">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="flex -space-x-2">
+                  <div className="w-8 h-8 rounded-full border-2 border-[#005c55] bg-teal-100 text-teal-900 flex items-center justify-center font-bold text-[10px]">
+                    EM
+                  </div>
+                  <div className="w-8 h-8 rounded-full border-2 border-[#005c55] bg-teal-200 text-teal-900 flex items-center justify-center font-bold text-[10px]">
+                    +2k
+                  </div>
+                </div>
+                <span className="text-xs font-bold tracking-wide text-teal-50">Trusted by 2,000+ Pharmacies</span>
+              </div>
+              <p className="text-xs italic text-teal-100/80 leading-normal">
+                &ldquo;MediFind has revolutionized how we track stock across our Greater Accra branches.&rdquo;
+              </p>
+            </div>
+          </div>
         </div>
 
-        {/* Login Box */}
-        <div className="w-full max-w-md mx-auto">
+        {/* Right Side: Login Form */}
+        <div className="p-8 md:p-14 flex flex-col justify-center bg-white">
           <div className="mb-8">
-            <h2 className="text-3xl font-extrabold text-slate-800 tracking-tight mb-2">
-              Pharmacy Portal
-            </h2>
-            <p className="text-sm font-semibold text-slate-500">
-              Access your inventory and manage prescription reservations.
-            </p>
+            <h3 className="text-2xl font-black text-slate-900 mb-1.5 font-headline">Welcome Back</h3>
+            <p className="text-xs font-semibold text-slate-500">Please enter your credentials to access the pharmacy dashboard.</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {error && (
-              <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
-                <ShieldCheck className="text-red-500 shrink-0 mt-0.5" size={18} />
-                <span className="text-xs font-semibold text-red-700">{error}</span>
+              <div className="p-3.5 bg-rose-50 border border-rose-200 rounded flex items-start gap-2.5">
+                <ShieldCheck size={18} className="text-rose-500 shrink-0 mt-0.5" />
+                <span className="text-xs font-semibold text-rose-800">{error}</span>
               </div>
             )}
 
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-                Pharmacy Email Address
+            {/* Email Field */}
+            <div className="space-y-1.5">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500" htmlFor="email">
+                EMAIL ADDRESS
               </label>
               <div className="relative">
-                <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
-                  <Mail size={18} className="text-slate-400" />
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                  <Mail size={18} />
                 </span>
                 <input
+                  id="email"
                   type="email"
+                  required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="pharmacy@medifind.com"
-                  className="w-full pl-11 pr-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all duration-150 bg-slate-50/50"
-                  required
+                  placeholder="name@pharmacy.com"
+                  className="w-full pl-11 pr-4 py-3 bg-white border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-[#005c55] focus:border-[#005c55] text-sm font-semibold text-slate-800 transition-all placeholder:text-slate-300"
                 />
               </div>
             </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Password
+            {/* Password Field */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500" htmlFor="password">
+                  PASSWORD
                 </label>
-                <Link
-                  href="/forgot-password"
-                  className="text-xs font-bold text-primary hover:underline"
-                >
+                <Link href="/forgot-password" className="text-xs font-bold text-[#005c55] hover:underline">
                   Forgot password?
                 </Link>
               </div>
               <div className="relative">
-                <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
-                  <Lock size={18} className="text-slate-400" />
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                  <Lock size={18} />
                 </span>
                 <input
-                  type="password"
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-11 pr-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all duration-150 bg-slate-50/50"
-                  required
+                  className="w-full pl-11 pr-11 py-3 bg-white border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-[#005c55] focus:border-[#005c55] text-sm font-semibold text-slate-800 transition-all placeholder:text-slate-300"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
             </div>
 
             {/* Remember Me */}
             <div className="flex items-center">
               <input
-                id="remember-me"
-                name="remember-me"
+                id="remember"
                 type="checkbox"
-                className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary/45"
+                className="w-4 h-4 rounded border-slate-300 text-[#005c55] focus:ring-[#005c55]"
               />
-              <label htmlFor="remember-me" className="ml-2 block text-xs font-semibold text-slate-500">
-                Remember my login credentials
+              <label htmlFor="remember" className="ml-2 text-xs font-semibold text-slate-600 cursor-pointer select-none">
+                Remember me for 30 days
               </label>
             </div>
 
-            {/* Sign in Button */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-primary hover:bg-teal-800 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-teal-700/20 hover:shadow-teal-700/35 transition-all duration-200 flex items-center justify-center gap-2 text-sm disabled:opacity-75 disabled:cursor-not-allowed select-none"
-            >
-              {loading ? (
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <>
-                  Sign In to Dashboard
-                  <ArrowRight size={16} />
-                </>
-              )}
-            </button>
+            {/* Submit Action */}
+            <div className="space-y-3 pt-2">
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 px-4 bg-[#005c55] hover:bg-teal-800 text-white font-bold rounded shadow-sm transition-all duration-150 flex items-center justify-center gap-2 text-sm disabled:opacity-75"
+              >
+                {loading ? (
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <>
+                    Sign In
+                    <ArrowRight size={16} />
+                  </>
+                )}
+              </button>
+
+              <div className="flex items-center gap-3 py-1">
+                <hr className="flex-grow border-slate-200" />
+                <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">OR</span>
+                <hr className="flex-grow border-slate-200" />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setEmail("central@ghanapharmacy.gov.gh")}
+                className="w-full py-2.5 px-4 bg-white border border-slate-300 text-slate-700 font-bold rounded hover:bg-slate-50 transition-all flex items-center justify-center gap-2 text-xs"
+              >
+                <BadgeCheck size={16} className="text-[#005c55]" />
+                Sign in with Demo Pharmacy Account
+              </button>
+            </div>
           </form>
 
-          {/* Registration Footer Link */}
-          <div className="mt-8 text-center text-xs">
-            <span className="text-slate-500 font-semibold">New pharmacy branch? </span>
-            <Link href="/register" className="font-extrabold text-primary hover:underline">
-              Register Branch Now
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      {/* Right Column: Hero Banner */}
-      <div className="hidden lg:flex lg:w-[55%] bg-primary relative items-center justify-center px-12 py-24 select-none">
-        {/* Subtle Decorative Overlay Elements */}
-        <div className="absolute inset-0 bg-gradient-to-tr from-teal-950 via-teal-900 to-primary/80 opacity-95 z-0" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-teal-600/25 via-transparent to-transparent z-0" />
-        
-        {/* Grid dots backdrop */}
-        <div className="absolute inset-0 opacity-10 bg-[linear-gradient(to_right,#808080_1px,transparent_1px),linear-gradient(to_bottom,#808080_1px,transparent_1px)] bg-[size:24px_24px] z-0" />
-
-        {/* Content Box */}
-        <div className="relative z-10 w-full max-w-lg text-white flex flex-col gap-8">
-          <div>
-            <span className="px-3.5 py-1.5 rounded-full bg-teal-400/20 border border-teal-400/30 text-teal-300 font-bold text-xs uppercase tracking-wider">
-              Health Platform
-            </span>
-            <h1 className="text-4xl font-extrabold tracking-tight leading-tight mt-4 font-headline">
-              Connecting Pharmacies & Patients Across Ghana
-            </h1>
-            <p className="text-teal-100/80 text-sm mt-3 leading-relaxed">
-              MediFind Pharmacy Hub allows verified pharmaceutical dispensaries to catalog medicines, monitor stock levels in real-time, and process prescription pickups, serving thousands of citizens daily.
+          {/* Footer Register Link */}
+          <div className="mt-8 pt-6 border-t border-slate-100 text-center">
+            <p className="text-xs font-semibold text-slate-500">
+              New to MediFind Ghana?{" "}
+              <Link href="/register" className="text-[#005c55] font-extrabold hover:underline ml-1">
+                Register your pharmacy
+              </Link>
             </p>
           </div>
-
-          {/* Quick Metrics display */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="p-4 rounded-2xl bg-teal-900/30 border border-teal-700/30 backdrop-blur-sm">
-              <span className="text-3xl font-extrabold text-teal-300">100k+</span>
-              <p className="text-xs font-semibold text-teal-100/60 mt-1">Prescriptions Fulfilled</p>
-            </div>
-            <div className="p-4 rounded-2xl bg-teal-900/30 border border-teal-700/30 backdrop-blur-sm">
-              <span className="text-3xl font-extrabold text-teal-300">450+</span>
-              <p className="text-xs font-semibold text-teal-100/60 mt-1">Partner Pharmacies</p>
-            </div>
-          </div>
-
-          {/* Bottom Security Footer */}
-          <div className="flex items-center gap-2 text-xs text-teal-200/60">
-            <ShieldCheck size={16} className="text-teal-400" />
-            <span>Regulated by the Pharmacy Council of Ghana</span>
-          </div>
         </div>
       </div>
-    </div>
+
+      {/* Support Floating Button */}
+      <button 
+        title="Support Center"
+        onClick={() => alert("MediFind Pharmacy Support Line: +233 30 223 4455")}
+        className="fixed bottom-6 right-6 w-12 h-12 bg-[#005c55] text-white rounded-full flex items-center justify-center shadow-lg hover:scale-105 transition-transform z-20"
+      >
+        <Headphones size={22} />
+      </button>
+    </main>
   );
 }
+
