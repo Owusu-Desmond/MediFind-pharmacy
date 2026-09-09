@@ -34,9 +34,25 @@ export interface Reservation {
   fulfillmentMethod: "Pickup" | "Delivery";
   fulfillmentTime?: string;
   fulfillmentAddress?: string;
-  paymentPreference: string;
-  status: "Pending" | "Confirmed" | "Picked Up" | "Cancelled";
+  paymentPreference?: string;
+  paymentMethod?: "PAYSTACK" | "CASH" | string;
+  paymentStatus: "UNPAID" | "PENDING" | "PAID" | "FAILED" | string;
+  status:
+    | "Pending"
+    | "Confirmed"
+    | "Approved"
+    | "Preparing"
+    | "Out for Delivery"
+    | "Ready for Pickup"
+    | "Delivered"
+    | "Collected"
+    | "Picked Up"
+    | "Cancelled";
   notes?: string;
+  rejectionReason?: string;
+  reservationCode?: string;
+  expiresAt?: string;
+  paidAt?: string;
 }
 
 export interface PharmacyProfile {
@@ -51,6 +67,15 @@ export interface PharmacyProfile {
   isActive: boolean;
   gpsCoordinates?: string;
   pharmacistName?: string;
+  paystackSubaccountCode?: string;
+  paystackSubaccountStatus?: string;
+  paymentAccountType?: string;
+  bankName?: string;
+  accountName?: string;
+  accountNumber?: string;
+  mobileMoneyProvider?: string;
+  mobileMoneyNumber?: string;
+  paymentAccountVerified?: boolean;
 }
 
 interface Notification {
@@ -74,7 +99,8 @@ interface AppContextType {
   addMedicine: (med: Omit<Medicine, "id" | "status">) => Promise<void>;
   updateMedicine: (id: string, med: Partial<Medicine>) => Promise<void>;
   deleteMedicine: (id: string) => Promise<void>;
-  updateReservationStatus: (id: string, status: Reservation["status"]) => Promise<void>;
+  updateReservationStatus: (id: string, status: Reservation["status"], reason?: string) => Promise<void>;
+  markCashPaid: (id: string) => Promise<void>;
   updateProfile: (updatedProfile: Partial<PharmacyProfile>) => Promise<void>;
   markNotificationRead: (id: string) => void;
   refreshData: () => Promise<void>;
@@ -93,6 +119,8 @@ const defaultProfile: PharmacyProfile = {
   isActive: true,
   gpsCoordinates: "5.5601° N, 0.2057° W",
   pharmacistName: "Dr. Emmanuel Mensah, PharmD",
+  paystackSubaccountStatus: "PENDING",
+  paymentAccountVerified: false,
 };
 
 const mapApiInventoryToMedicine = (inv: ApiInventoryItem): Medicine => {
@@ -124,24 +152,34 @@ const mapApiInventoryToMedicine = (inv: ApiInventoryItem): Medicine => {
 const mapApiReservationToReservation = (res: ApiReservation): Reservation => {
   let mappedStatus: Reservation["status"] = "Pending";
   const rawStatus = (res.status || "").toLowerCase();
-  if (rawStatus.includes("approved") || rawStatus.includes("confirmed")) {
-    mappedStatus = "Confirmed";
-  } else if (rawStatus.includes("collected") || rawStatus.includes("picked") || rawStatus.includes("delivered")) {
+  if (rawStatus === "pending" || rawStatus.includes("review")) {
+    mappedStatus = "Pending";
+  } else if (rawStatus === "preparing") {
+    mappedStatus = "Preparing";
+  } else if (rawStatus === "out for delivery" || rawStatus.includes("out_for_delivery")) {
+    mappedStatus = "Out for Delivery";
+  } else if (rawStatus === "ready for pickup" || rawStatus === "ready") {
+    mappedStatus = "Ready for Pickup";
+  } else if (rawStatus === "delivered") {
+    mappedStatus = "Delivered";
+  } else if (rawStatus === "collected" || rawStatus === "picked up" || rawStatus === "completed") {
     mappedStatus = "Picked Up";
-  } else if (rawStatus.includes("cancel")) {
+  } else if (rawStatus.includes("cancel") || rawStatus.includes("expired") || rawStatus.includes("rejected")) {
     mappedStatus = "Cancelled";
+  } else if (rawStatus.includes("approved") || rawStatus.includes("confirmed") || rawStatus.includes("reserved") || rawStatus.includes("paid")) {
+    mappedStatus = "Confirmed";
   }
 
   const firstMed = res.items?.[0]?.medicine?.name || "Prescription Item";
+  const paymentMethod = res.payment_method || (res.payment_preference === "Pay Online" ? "PAYSTACK" : res.payment_preference === "Pay at Pharmacy" || res.payment_preference === "Pay on Delivery" ? "CASH" : undefined);
+  const paymentStatus = res.payment_status || (res.status === "Paid" ? "PAID" : "UNPAID");
 
   return {
-    id: res.ref_number || `RES-${res.id}`,
+    id: res.ref_number || res.reservation_code || `RES-${res.id}`,
     rawId: res.id,
     patientName: res.patient?.name || `Patient #${res.patient_id}`,
     patientPhone: res.patient?.phone || "+233 55 456 7890",
     date: res.date ? String(res.date).split("T")[0] : new Date().toISOString().split("T")[0],
-
-
     time: "10:00 AM",
     medicines: (res.items || []).map((item) => ({
       name: item.medicine?.name || firstMed,
@@ -152,11 +190,18 @@ const mapApiReservationToReservation = (res: ApiReservation): Reservation => {
     fulfillmentMethod: (res.fulfillment_method as any) === "Delivery" ? "Delivery" : "Pickup",
     fulfillmentTime: res.fulfillment_time || undefined,
     fulfillmentAddress: res.fulfillment_address || undefined,
-    paymentPreference: res.payment_preference || "Mobile Money (MTN MoMo)",
+    paymentPreference: res.payment_preference || (paymentMethod === "PAYSTACK" ? "Pay Online" : paymentMethod === "CASH" ? "Pay at Pharmacy" : undefined),
+    paymentMethod,
+    paymentStatus,
     status: mappedStatus,
     notes: res.notes || undefined,
+    rejectionReason: res.rejection_reason || undefined,
+    reservationCode: res.reservation_code || res.ref_number || `MF-${res.id}`,
+    expiresAt: res.expires_at,
+    paidAt: res.paid_at,
   };
 };
+
 
 const CACHE_KEY = "pharmacy_app_cache";
 
@@ -402,15 +447,53 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const updateReservationStatus = async (id: string, status: Reservation["status"]) => {
+  const markCashPaid = async (id: string) => {
     const resItem = reservations.find((r) => r.id === id || String(r.rawId) === id);
     const targetNumericId = resItem?.rawId || parseInt(id.replace(/\D/g, ""), 10);
     if (!targetNumericId) return;
 
     try {
-      await api.updateReservationStatus(targetNumericId, status);
+      await api.markCashPaid(targetNumericId);
       setReservations((prev) =>
-        prev.map((r) => (r.id === id || String(r.rawId) === String(targetNumericId) ? { ...r, status } : r))
+        prev.map((r) =>
+          r.id === id || String(r.rawId) === String(targetNumericId)
+            ? { ...r, status: "Picked Up", paymentStatus: "PAID", paymentMethod: "CASH" }
+            : r
+        )
+      );
+
+      // Refresh inventory as stock levels were deducted
+      if (profile.id) {
+        const invList = await api.getPharmacyInventory(profile.id);
+        setMedicines(invList.map(mapApiInventoryToMedicine));
+      }
+
+      setNotifications((prev) => [
+        {
+          id: `notif-${Date.now()}`,
+          type: "success",
+          title: "Cash Payment Confirmed",
+          message: `Cash payment for reservation ${id} was marked as PAID and completed.`,
+          time: "Just now",
+          read: false,
+        },
+        ...prev,
+      ]);
+    } catch (err: any) {
+      console.error("Failed to mark cash paid:", err);
+      throw err;
+    }
+  };
+
+  const updateReservationStatus = async (id: string, status: Reservation["status"], reason?: string) => {
+    const resItem = reservations.find((r) => r.id === id || String(r.rawId) === id);
+    const targetNumericId = resItem?.rawId || parseInt(id.replace(/\D/g, ""), 10);
+    if (!targetNumericId) return;
+
+    try {
+      await api.updateReservationStatus(targetNumericId, status, reason);
+      setReservations((prev) =>
+        prev.map((r) => (r.id === id || String(r.rawId) === String(targetNumericId) ? { ...r, status, rejectionReason: reason || r.rejectionReason } : r))
       );
 
       // Refresh inventory as stock levels may change when confirmed
@@ -476,6 +559,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateMedicine,
         deleteMedicine,
         updateReservationStatus,
+        markCashPaid,
         updateProfile,
         markNotificationRead,
         refreshData: loadBackendData,
@@ -485,6 +569,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     </AppContext.Provider>
   );
 };
+
 
 export const useApp = () => {
   const context = useContext(AppContext);

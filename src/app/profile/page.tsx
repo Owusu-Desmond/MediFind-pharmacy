@@ -68,12 +68,94 @@ export default function ProfilePage() {
   const [addingStaff, setAddingStaff] = useState(false);
   const [staffError, setStaffError] = useState("");
 
+  // Payout / Paystack State
+  const [payoutData, setPayoutData] = useState({
+    paymentAccountType: profile.paymentAccountType || "mobile_money",
+    mobileMoneyProvider: profile.mobileMoneyProvider || "MTN",
+    mobileMoneyNumber: profile.mobileMoneyNumber || profile.phone || "",
+    bankName: profile.bankName || "GCB Bank Limited",
+    accountName: profile.accountName || profile.name || "",
+    accountNumber: profile.accountNumber || "",
+  });
+  const [payoutStatus, setPayoutStatus] = useState({
+    subaccountCode: profile.paystackSubaccountCode || "",
+    subaccountStatus: profile.paystackSubaccountStatus || "PENDING",
+    verified: profile.paymentAccountVerified || false,
+    maskedNumber: "",
+  });
+  const [savingPayout, setSavingPayout] = useState(false);
+  const [payoutSuccess, setPayoutSuccess] = useState(false);
+  const [payoutError, setPayoutError] = useState("");
+
   const pharmacyId = profile.id || 1;
 
-  // Fetch Staff List on Mount
+  // Fetch Staff & Payout Status on Mount
   useEffect(() => {
     fetchStaff();
+    fetchPayoutDetails();
   }, [pharmacyId]);
+
+  const fetchPayoutDetails = async () => {
+    if (!pharmacyId) return;
+    try {
+      const res = await api.getSubaccount(pharmacyId);
+      if (res) {
+        setPayoutStatus({
+          subaccountCode: res.paystack_subaccount_code || "",
+          subaccountStatus: res.paystack_subaccount_status || "PENDING",
+          verified: res.payment_account_verified,
+          maskedNumber: res.account_number_masked || "",
+        });
+        if (res.payment_account_type) {
+          setPayoutData((prev) => ({
+            ...prev,
+            paymentAccountType: res.payment_account_type || prev.paymentAccountType,
+            mobileMoneyProvider: res.mobile_money_provider || prev.mobileMoneyProvider,
+            bankName: res.bank_name || prev.bankName,
+            accountName: res.account_name || prev.accountName,
+          }));
+        }
+      }
+    } catch (err) {
+      console.warn("Could not fetch subaccount details:", err);
+    }
+  };
+
+  const handleSavePayout = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingPayout(true);
+    setPayoutError("");
+    setPayoutSuccess(false);
+
+    try {
+      const accNum = payoutData.paymentAccountType === "mobile_money" 
+        ? payoutData.mobileMoneyNumber 
+        : payoutData.accountNumber;
+
+      const res = await api.setupSubaccount(pharmacyId, {
+        payment_account_type: payoutData.paymentAccountType,
+        bank_name: payoutData.bankName,
+        account_name: payoutData.accountName,
+        account_number: accNum,
+        mobile_money_provider: payoutData.mobileMoneyProvider,
+        mobile_money_number: payoutData.mobileMoneyNumber,
+      });
+
+      setPayoutStatus({
+        subaccountCode: res.paystack_subaccount_code || "",
+        subaccountStatus: res.paystack_subaccount_status || "PENDING",
+        verified: res.payment_account_verified,
+        maskedNumber: res.account_number_masked || "",
+      });
+
+      setPayoutSuccess(true);
+      setTimeout(() => setPayoutSuccess(false), 3500);
+    } catch (err: any) {
+      setPayoutError(err.message || "Failed to setup Paystack subaccount");
+    } finally {
+      setSavingPayout(false);
+    }
+  };
 
   const fetchStaff = async () => {
     setLoadingStaff(true);
@@ -102,6 +184,7 @@ export default function ProfilePage() {
       alert(err.message || "Failed to update profile settings.");
     }
   };
+
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -314,6 +397,148 @@ export default function ProfilePage() {
           </button>
         </div>
       </form>
+
+      {/* SECTION 2.5: PAYSTACK PAYOUT & SUBACCOUNT SETUP */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+          <div>
+            <h3 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
+              <ShieldCheck className="text-primary" size={16} />
+              Paystack Payout & Subaccount Details
+            </h3>
+            <p className="text-[11px] text-slate-400 font-semibold mt-0.5">
+              Online patient payments are automatically split and transferred directly to your account.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold border ${
+              payoutStatus.verified
+                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                : "bg-amber-50 text-amber-700 border-amber-200"
+            }`}>
+              {payoutStatus.verified ? "Active Subaccount" : "Pending Verification"}
+            </span>
+            {payoutStatus.subaccountCode && (
+              <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded-lg">
+                {payoutStatus.subaccountCode}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {payoutSuccess && (
+          <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-800 text-xs font-bold flex items-center gap-2">
+            <CheckCircle size={16} /> Payout account and Paystack subaccount updated successfully!
+          </div>
+        )}
+
+        {payoutError && (
+          <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl text-rose-800 text-xs font-bold">
+            {payoutError}
+          </div>
+        )}
+
+        <form onSubmit={handleSavePayout} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+                Payout Account Type
+              </label>
+              <select
+                value={payoutData.paymentAccountType}
+                onChange={(e) => setPayoutData({ ...payoutData, paymentAccountType: e.target.value })}
+                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm bg-slate-50/30 font-semibold text-slate-700"
+              >
+                <option value="mobile_money">Mobile Money (MoMo)</option>
+                <option value="bank">Traditional Bank Account</option>
+              </select>
+            </div>
+
+            {payoutData.paymentAccountType === "mobile_money" ? (
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+                  Mobile Money Provider
+                </label>
+                <select
+                  value={payoutData.mobileMoneyProvider}
+                  onChange={(e) => setPayoutData({ ...payoutData, mobileMoneyProvider: e.target.value })}
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm bg-slate-50/30 font-semibold text-slate-700"
+                >
+                  <option value="MTN">MTN Mobile Money</option>
+                  <option value="VOD">Telecel Cash (Vodafone)</option>
+                  <option value="ATL">AT Money (AirtelTigo)</option>
+                </select>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+                  Bank Name
+                </label>
+                <select
+                  value={payoutData.bankName}
+                  onChange={(e) => setPayoutData({ ...payoutData, bankName: e.target.value })}
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm bg-slate-50/30 font-semibold text-slate-700"
+                >
+                  <option value="GCB Bank Limited">GCB Bank Limited</option>
+                  <option value="Ecobank Ghana">Ecobank Ghana</option>
+                  <option value="Absa Bank Ghana">Absa Bank Ghana</option>
+                  <option value="Stanbic Bank Ghana">Stanbic Bank Ghana</option>
+                  <option value="Standard Chartered Bank">Standard Chartered Bank</option>
+                  <option value="Fidelity Bank Ghana">Fidelity Bank Ghana</option>
+                  <option value="CalBank">CalBank</option>
+                  <option value="Zenith Bank Ghana">Zenith Bank Ghana</option>
+                </select>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+                Account Holder Name
+              </label>
+              <input
+                type="text"
+                required
+                value={payoutData.accountName}
+                onChange={(e) => setPayoutData({ ...payoutData, accountName: e.target.value })}
+                placeholder="Official Account Name"
+                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm bg-slate-50/30 font-semibold text-slate-700"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+                {payoutData.paymentAccountType === "mobile_money" ? "Mobile Money Phone Number" : "Bank Account Number"}
+              </label>
+              <input
+                type="text"
+                required
+                value={payoutData.paymentAccountType === "mobile_money" ? payoutData.mobileMoneyNumber : payoutData.accountNumber}
+                onChange={(e) => {
+                  if (payoutData.paymentAccountType === "mobile_money") {
+                    setPayoutData({ ...payoutData, mobileMoneyNumber: e.target.value });
+                  } else {
+                    setPayoutData({ ...payoutData, accountNumber: e.target.value });
+                  }
+                }}
+                placeholder={payoutData.paymentAccountType === "mobile_money" ? "e.g. 0244123456" : "e.g. 1041010001234"}
+                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm bg-slate-50/30 font-semibold text-slate-700 font-mono"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <button
+              type="submit"
+              disabled={savingPayout}
+              className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white font-bold py-2.5 px-5 rounded-xl shadow-sm transition-all text-xs"
+            >
+              {savingPayout ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
+              {savingPayout ? "Connecting Paystack..." : "Save Payout & Connect Subaccount"}
+            </button>
+          </div>
+        </form>
+      </div>
+
 
       {/* SECTION 3: PHARMACY STAFF MANAGEMENT */}
       <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-5">

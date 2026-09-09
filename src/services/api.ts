@@ -106,9 +106,16 @@ export interface ApiReservation {
   fulfillment_time?: string;
   payment_preference?: string;
   status: string;
+  payment_method?: string;
+  payment_status?: string;
   total_price: number;
   notes?: string;
+  rejection_reason?: string;
   ref_number?: string;
+  reservation_code?: string;
+  expires_at?: string;
+  paid_at?: string;
+  cash_payment_confirmed_at?: string;
   patient?: {
     name: string;
     phone?: string;
@@ -142,6 +149,18 @@ export const api = {
     removeToken();
   },
 
+  async getMe() {
+    return fetchApi<{
+      id: number;
+      email: string;
+      name: string;
+      phone?: string;
+      location?: string;
+      role: string;
+      status: string;
+    }>("/api/auth/me");
+  },
+
   async forgotPassword(email: string) {
     return fetchApi<{ message: string; reset_token: string; email: string }>(
       "/api/auth/forgot-password",
@@ -162,87 +181,43 @@ export const api = {
     );
   },
 
-
-  async getMe() {
-    return fetchApi<{
-      id: number;
-      email: string;
-      name: string;
-      role: string;
-      phone?: string;
-      location?: string;
-    }>("/api/auth/me");
+  async registerPharmacy(formData: any) {
+    return fetchApi<any>("/api/pharmacies/", {
+      method: "POST",
+      body: JSON.stringify(formData),
+    });
   },
 
   async uploadCertificate(file: File) {
-    const formData = new FormData();
-    formData.append("file", file);
+    const data = new FormData();
+    data.append("file", file);
+    return fetchApi<{ url: string; filename: string }>("/api/pharmacies/upload-certificate", {
+      method: "POST",
+      body: data,
+    });
+  },
 
-    return fetchApi<{ url: string; filename: string }>(
-      "/api/pharmacies/upload-certificate",
-      {
-        method: "POST",
-        body: formData,
-      }
+  async getSignedUrl(objectPath: string) {
+    return fetchApi<{ signed_url: string; expires_in: number }>(
+      `/api/pharmacies/signed-url?object_path=${encodeURIComponent(objectPath)}`
     );
   },
 
-  async registerPharmacy(pharmacyData: {
-    name: string;
-    location: string;
-    license_number: string;
-    pharmacist_name?: string;
-    pharmacist_id?: string;
-    phone?: string;
-    email?: string;
-    delivery_offered?: boolean;
-    opening_hours?: string;
-    gps_address?: string;
-    certificate_url?: string;
-  }) {
-    return fetchApi("/api/pharmacies/", {
+  async uploadMedicineImage(file: File) {
+    const data = new FormData();
+    data.append("file", file);
+    return fetchApi<{ url: string; filename: string }>("/api/pharmacies/upload-medicine-image", {
       method: "POST",
-      body: JSON.stringify(pharmacyData),
+      body: data,
     });
   },
 
   async getMyPharmacy() {
-    return fetchApi<{
-      id: number;
-      name: string;
-      location: string;
-      license_number: string;
-      pharmacist_name?: string;
-      pharmacist_id?: string;
-      phone?: string;
-      email?: string;
-      status: string;
-      delivery_offered: boolean;
-      opening_hours?: string;
-      lat?: number;
-      lng?: number;
-      certificate_url?: string;
-    }>("/api/pharmacies/my-pharmacy");
+    return fetchApi<any>("/api/pharmacies/my-pharmacy");
   },
 
-  async updatePharmacy(
-    pharmacyId: number,
-    pharmacyData: Partial<{
-      name: string;
-      location: string;
-      license_number: string;
-      pharmacist_name: string;
-      pharmacist_id: string;
-      phone: string;
-      email: string;
-      delivery_offered: boolean;
-      opening_hours: string;
-      lat: number;
-      lng: number;
-      certificate_url: string;
-    }>
-  ) {
-    return fetchApi(`/api/pharmacies/${pharmacyId}`, {
+  async updatePharmacy(pharmacyId: number, pharmacyData: any) {
+    return fetchApi<any>(`/api/pharmacies/${pharmacyId}`, {
       method: "PUT",
       body: JSON.stringify(pharmacyData),
     });
@@ -250,23 +225,6 @@ export const api = {
 
   async getPharmacyInventory(pharmacyId: number) {
     return fetchApi<ApiInventoryItem[]>(`/api/pharmacies/${pharmacyId}/inventory`);
-  },
-
-  async uploadMedicineImage(file: File) {
-    const formData = new FormData();
-    formData.append("file", file);
-    const token = localStorage.getItem("pharmacy_token");
-    const response = await fetch(`${API_BASE_URL}/api/pharmacies/upload-medicine-image`, {
-      method: "POST",
-      headers: {
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: formData,
-    });
-    if (!response.ok) {
-      throw new Error("Failed to upload medicine image");
-    }
-    return response.json() as Promise<{ url: string; filename: string }>;
   },
 
   async addInventoryItem(
@@ -332,10 +290,75 @@ export const api = {
     return fetchApi<ApiReservation[]>("/api/reservations/");
   },
 
-  async updateReservationStatus(reservationId: number, status: string) {
-    return fetchApi(`/api/reservations/${reservationId}/status?status=${encodeURIComponent(status)}`, {
+  async updateReservationStatus(reservationId: number, status: string, reason?: string) {
+    let url = `/api/reservations/${reservationId}/status?status=${encodeURIComponent(status)}`;
+    if (reason) {
+      url += `&reason=${encodeURIComponent(reason)}`;
+    }
+    return fetchApi(url, {
       method: "PATCH",
     });
+  },
+
+  async markCashPaid(reservationId: number | string) {
+    return fetchApi<{
+      success: boolean;
+      message: string;
+      reservation_id: number;
+      reservation_status: string;
+      payment_status: string;
+      payment_method: string;
+      amount: number;
+    }>(`/api/reservations/${reservationId}/mark-cash-paid`, {
+      method: "POST",
+    });
+  },
+
+  async getBanks() {
+    return fetchApi<Array<{ name: string; code: string; type: string }>>("/api/payments/banks");
+  },
+
+  async setupSubaccount(
+    pharmacyId: number,
+    payoutData: {
+      payment_account_type: string;
+      bank_name?: string;
+      bank_code?: string;
+      account_name: string;
+      account_number: string;
+      mobile_money_provider?: string;
+      mobile_money_number?: string;
+    }
+  ) {
+    return fetchApi<{
+      pharmacy_id: number;
+      paystack_subaccount_code?: string;
+      paystack_subaccount_status: string;
+      payment_account_type?: string;
+      bank_name?: string;
+      account_name?: string;
+      account_number_masked?: string;
+      mobile_money_provider?: string;
+      payment_account_verified: boolean;
+      message?: string;
+    }>(`/api/pharmacies/${pharmacyId}/paystack/subaccount`, {
+      method: "POST",
+      body: JSON.stringify(payoutData),
+    });
+  },
+
+  async getSubaccount(pharmacyId: number) {
+    return fetchApi<{
+      pharmacy_id: number;
+      paystack_subaccount_code?: string;
+      paystack_subaccount_status: string;
+      payment_account_type?: string;
+      bank_name?: string;
+      account_name?: string;
+      account_number_masked?: string;
+      mobile_money_provider?: string;
+      payment_account_verified: boolean;
+    }>(`/api/pharmacies/${pharmacyId}/paystack/subaccount`);
   },
 
   async changePassword(currentPassword: string, newPassword: string) {
