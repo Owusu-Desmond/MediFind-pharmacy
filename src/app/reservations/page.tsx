@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useApp, Reservation } from "@/context/AppContext";
+import { SkeletonQueue, SkeletonDetail } from "@/components/Skeleton";
 import { 
   Check, 
   X, 
@@ -17,11 +18,17 @@ import {
 } from "lucide-react";
 
 export default function ReservationsPage() {
-  const { reservations, updateReservationStatus } = useApp();
+  const { reservations, updateReservationStatus, loading } = useApp();
   const [selectedResId, setSelectedResId] = useState<string>(
     reservations.length > 0 ? reservations[0].id : ""
   );
   const [filter, setFilter] = useState<string>("All");
+
+  useEffect(() => {
+    if (!selectedResId && reservations.length > 0) {
+      setSelectedResId(reservations[0].id);
+    }
+  }, [reservations, selectedResId]);
 
   const selectedRes = reservations.find((r) => r.id === selectedResId);
 
@@ -76,7 +83,9 @@ export default function ReservationsPage() {
 
         {/* Scrollable list */}
         <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
-          {filteredRes.length === 0 ? (
+          {loading ? (
+            <SkeletonQueue />
+          ) : filteredRes.length === 0 ? (
             <div className="p-8 text-center text-slate-400 text-xs font-semibold">
               No reservations found.
             </div>
@@ -115,7 +124,9 @@ export default function ReservationsPage() {
 
       {/* Right Pane: Selected details view */}
       <div className="flex-1 bg-white border border-slate-200 rounded-2xl flex flex-col overflow-hidden shadow-sm">
-        {selectedRes ? (
+        {loading ? (
+          <SkeletonDetail />
+        ) : selectedRes ? (
           <div className="flex-1 flex flex-col overflow-hidden animate-in fade-in duration-150">
             
             {/* Detail Header */}

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { api, getToken, ApiInventoryItem, ApiReservation } from "@/services/api";
+import { api, getToken, removeToken, ApiInventoryItem, ApiReservation } from "@/services/api";
 
 export interface Medicine {
   id: string; // string representation of Inventory ID
@@ -158,6 +158,42 @@ const mapApiReservationToReservation = (res: ApiReservation): Reservation => {
   };
 };
 
+const CACHE_KEY = "pharmacy_app_cache";
+
+interface AppCacheData {
+  user: { email: string; name: string; id?: number } | null;
+  profile: PharmacyProfile;
+  medicines: Medicine[];
+  reservations: Reservation[];
+}
+
+const saveCache = (data: Partial<AppCacheData>) => {
+  if (typeof window === "undefined") return;
+  try {
+    const existingRaw = localStorage.getItem(CACHE_KEY);
+    const existing = existingRaw ? JSON.parse(existingRaw) : {};
+    const updated = { ...existing, ...data };
+    localStorage.setItem(CACHE_KEY, JSON.stringify(updated));
+  } catch (err) {
+    console.warn("Failed to save cache to localStorage:", err);
+  }
+};
+
+const getCache = (): AppCacheData | null => {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const clearCache = () => {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(CACHE_KEY);
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<{ email: string; name: string; id?: number } | null>(null);
   const [medicines, setMedicines] = useState<Medicine[]>([]);
@@ -166,15 +202,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  const loadBackendData = useCallback(async () => {
+  const loadBackendData = useCallback(async (options?: { silent?: boolean }) => {
     try {
-      setLoading(true);
-      const me = await api.getMe();
-      setUser({ email: me.email, name: me.name, id: me.id });
+      if (!options?.silent) {
+        setLoading(true);
+      }
 
-      const pharmacy = await api.getMyPharmacy();
-      if (pharmacy) {
-        setProfile({
+      // Concurrently fetch User, Pharmacy Profile, and Reservations
+      const [meRes, pharmacyRes, resListRes] = await Promise.allSettled([
+        api.getMe(),
+        api.getMyPharmacy(),
+        api.getPharmacyReservations(),
+      ]);
+
+      if (meRes.status === "rejected") {
+        throw meRes.reason;
+      }
+
+      const me = meRes.value;
+      const userData = { email: me.email, name: me.name, id: me.id };
+      setUser(userData);
+
+      let pharmacyProfile = defaultProfile;
+      let fetchedMedicines: Medicine[] = [];
+
+      if (pharmacyRes.status === "fulfilled" && pharmacyRes.value) {
+        const pharmacy = pharmacyRes.value;
+        pharmacyProfile = {
           id: pharmacy.id,
           name: pharmacy.name,
           email: pharmacy.email || me.email,
@@ -185,18 +239,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           deliveryOffered: pharmacy.delivery_offered ?? true,
           isActive: pharmacy.status === "Approved",
           pharmacistName: pharmacy.pharmacist_name || me.name,
-        });
+        };
+        setProfile(pharmacyProfile);
 
-        // Load inventory for this pharmacy
-        const invList = await api.getPharmacyInventory(pharmacy.id);
-        setMedicines(invList.map(mapApiInventoryToMedicine));
+        try {
+          const invList = await api.getPharmacyInventory(pharmacy.id);
+          fetchedMedicines = invList.map(mapApiInventoryToMedicine);
+          setMedicines(fetchedMedicines);
+        } catch (invErr) {
+          console.warn("[AppProvider] Failed to load inventory:", invErr);
+        }
       }
 
-      // Load reservations
-      const resList = await api.getPharmacyReservations();
-      setReservations(resList.map(mapApiReservationToReservation));
+      let fetchedReservations: Reservation[] = [];
+      if (resListRes.status === "fulfilled") {
+        fetchedReservations = resListRes.value.map(mapApiReservationToReservation);
+        setReservations(fetchedReservations);
+      }
+
+      saveCache({
+        user: userData,
+        profile: pharmacyProfile,
+        medicines: fetchedMedicines,
+        reservations: fetchedReservations,
+      });
     } catch (err) {
       console.warn("[AppProvider] Failed to load data from backend API:", err);
+      removeToken();
+      clearCache();
+      setUser(null);
     } finally {
       setLoading(false);
     }
@@ -205,8 +276,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     const token = getToken();
     if (token) {
-      loadBackendData();
+      const cached = getCache();
+      if (cached && cached.user) {
+        setUser(cached.user);
+        if (cached.profile) setProfile(cached.profile);
+        if (cached.medicines) setMedicines(cached.medicines);
+        if (cached.reservations) setReservations(cached.reservations);
+        setLoading(false);
+
+        loadBackendData({ silent: true });
+      } else {
+        loadBackendData();
+      }
     } else {
+      clearCache();
       setLoading(false);
     }
   }, [loadBackendData]);
@@ -225,6 +308,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const logout = () => {
     api.logout();
+    clearCache();
     setUser(null);
     setMedicines([]);
     setReservations([]);

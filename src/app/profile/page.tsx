@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
 import { api } from "@/services/api";
+import { SkeletonDetail } from "@/components/Skeleton";
 import { 
   User, 
   MapPin, 
@@ -34,7 +35,7 @@ interface StaffMember {
 }
 
 export default function ProfilePage() {
-  const { profile, updateProfile } = useApp();
+  const { profile, updateProfile, loading } = useApp();
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [pwSuccess, setPwSuccess] = useState(false);
 
@@ -158,6 +159,14 @@ export default function ProfilePage() {
       alert(err.message || "Failed to delete staff member.");
     }
   };
+
+  if (loading) {
+    return (
+      <div className="max-w-3xl mx-auto py-8 space-y-6">
+        <SkeletonDetail />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-3xl mx-auto space-y-8 animate-in fade-in duration-200 select-none pb-12">

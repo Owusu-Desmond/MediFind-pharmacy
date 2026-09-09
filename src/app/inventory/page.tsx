@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useApp, Medicine } from "@/context/AppContext";
 import { api } from "@/services/api";
+import { SkeletonTable } from "@/components/Skeleton";
 import {
   Plus,
   Search,
@@ -21,7 +22,7 @@ import {
 
 
 export default function InventoryPage() {
-  const { medicines, addMedicine, updateMedicine, deleteMedicine } = useApp();
+  const { medicines, addMedicine, updateMedicine, deleteMedicine, loading } = useApp();
 
   // Search & Filter State
   const [searchTerm, setSearchTerm] = useState("");
@@ -189,13 +190,16 @@ export default function InventoryPage() {
       </div>
 
       {/* Table Data */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          {filteredMeds.length === 0 ? (
-            <div className="text-center py-16 text-slate-400 text-sm font-semibold">
-              No matching medicines found in catalog.
-            </div>
-          ) : (
+      {loading ? (
+        <SkeletonTable rows={6} />
+      ) : (
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            {filteredMeds.length === 0 ? (
+              <div className="text-center py-16 text-slate-400 text-sm font-semibold">
+                No matching medicines found in catalog.
+              </div>
+            ) : (
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/50 text-slate-400 text-[10px] font-extrabold uppercase tracking-wider">
@@ -282,6 +286,7 @@ export default function InventoryPage() {
           )}
         </div>
       </div>
+    )}
 
       {/* MODAL: ADD MEDICINE */}
       {showAddModal && (

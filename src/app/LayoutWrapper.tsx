@@ -8,7 +8,7 @@ import Header from "@/components/Header";
 import { Activity } from "lucide-react";
 
 export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
-  const { user } = useApp();
+  const { user, loading } = useApp();
   const pathname = usePathname();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
@@ -21,7 +21,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
   }, []);
 
   useEffect(() => {
-    if (!mounted) return;
+    if (!mounted || loading) return;
 
     if (!user && !isAuthRoute) {
       // Redirect to login if trying to access dashboard pages without auth
@@ -30,9 +30,9 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
       // Redirect to dashboard if trying to access auth pages while logged in
       router.replace("/dashboard");
     }
-  }, [user, pathname, router, mounted, isAuthRoute]);
+  }, [user, loading, pathname, router, mounted, isAuthRoute]);
 
-  if (!mounted) {
+  if (!mounted || loading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-3">

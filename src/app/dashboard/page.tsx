@@ -3,6 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { useApp } from "@/context/AppContext";
+import { SkeletonMetrics, SkeletonTable } from "@/components/Skeleton";
 import { 
   ClipboardList, 
   Activity, 
@@ -19,7 +20,8 @@ export default function DashboardPage() {
     reservations, 
     medicines, 
     profile, 
-    updateReservationStatus 
+    updateReservationStatus,
+    loading 
   } = useApp();
 
   // Compute metrics
@@ -80,7 +82,10 @@ export default function DashboardPage() {
       </div>
 
       {/* Grid Statistics Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {loading ? (
+        <SkeletonMetrics />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         
         {/* Card 1: Pending */}
         <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4 hover:scale-[1.01] transition-transform duration-150">
@@ -126,6 +131,7 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+    )}
 
       {/* Main Grid: Chart & Warnings */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
