@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/context/AppContext";
@@ -28,8 +28,12 @@ import {
   UserCheck,
   CreditCard,
   Building2,
-  Wallet
+  Wallet,
+  Save,
+  RotateCcw
 } from "lucide-react";
+
+const DRAFT_STORAGE_KEY = "medifind_pharmacy_registration_draft";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -38,6 +42,8 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [detectingLocation, setDetectingLocation] = useState(false);
+  const [isDraftRestored, setIsDraftRestored] = useState(false);
+  const [hasDraft, setHasDraft] = useState(false);
   
   // Upload States
   const [uploadingLicense, setUploadingLicense] = useState(false);
@@ -54,6 +60,8 @@ export default function RegisterPage() {
   const [scheduleDays, setScheduleDays] = useState("Mon - Sat");
   const [openTime, setOpenTime] = useState("08:00 AM");
   const [closeTime, setCloseTime] = useState("09:00 PM");
+  const [declarationAgreed, setDeclarationAgreed] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Form State
   const [formData, setFormData] = useState({
@@ -76,6 +84,116 @@ export default function RegisterPage() {
     bankName: "",
     accountNumber: "",
   });
+
+  // Restore draft on mount
+  useEffect(() => {
+    try {
+      if (typeof window !== "undefined") {
+        const saved = localStorage.getItem(DRAFT_STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.formData) {
+            setFormData((prev) => ({ ...prev, ...parsed.formData }));
+          }
+          if (parsed.step && typeof parsed.step === "number" && parsed.step >= 1 && parsed.step <= 4) {
+            setStep(parsed.step);
+          }
+          if (parsed.scheduleDays) setScheduleDays(parsed.scheduleDays);
+          if (parsed.openTime) setOpenTime(parsed.openTime);
+          if (parsed.closeTime) setCloseTime(parsed.closeTime);
+          if (parsed.licenseUrl) setLicenseUrl(parsed.licenseUrl);
+          if (parsed.pharmacistCertUrl) setPharmacistCertUrl(parsed.pharmacistCertUrl);
+          if (parsed.licenseFileName) setLicenseFileName(parsed.licenseFileName);
+          if (parsed.certFileName) setCertFileName(parsed.certFileName);
+          if (parsed.declarationAgreed !== undefined) setDeclarationAgreed(parsed.declarationAgreed);
+          setHasDraft(true);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to restore registration draft:", err);
+    } finally {
+      setIsDraftRestored(true);
+    }
+  }, []);
+
+  // Persist draft on state changes
+  useEffect(() => {
+    if (!isDraftRestored || success) return;
+    try {
+      if (typeof window !== "undefined") {
+        const draft = {
+          formData,
+          step,
+          scheduleDays,
+          openTime,
+          closeTime,
+          licenseUrl,
+          pharmacistCertUrl,
+          licenseFileName,
+          certFileName,
+          declarationAgreed,
+          updatedAt: new Date().toISOString(),
+        };
+        localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+        setHasDraft(true);
+      }
+    } catch (err) {
+      console.error("Failed to save registration draft:", err);
+    }
+  }, [
+    formData,
+    step,
+    scheduleDays,
+    openTime,
+    closeTime,
+    licenseUrl,
+    pharmacistCertUrl,
+    licenseFileName,
+    certFileName,
+    declarationAgreed,
+    isDraftRestored,
+    success,
+  ]);
+
+  const handleClearDraft = () => {
+    if (confirm("Are you sure you want to clear your saved draft and reset all fields?")) {
+      try {
+        if (typeof window !== "undefined") {
+          localStorage.removeItem(DRAFT_STORAGE_KEY);
+        }
+      } catch (e) {}
+      setFormData({
+        name: "",
+        email: "",
+        phone: "",
+        location: "",
+        gpsAddress: "",
+        lat: "",
+        lng: "",
+        openingHours: "Mon - Sat: 08:00 AM - 09:00 PM",
+        deliveryOffered: true,
+        licenseNumber: "",
+        pharmacistName: "",
+        pharmacistId: "",
+        paymentAccountType: "mobile_money",
+        mobileMoneyProvider: "MTN",
+        mobileMoneyNumber: "",
+        accountName: "",
+        bankName: "",
+        accountNumber: "",
+      });
+      setScheduleDays("Mon - Sat");
+      setOpenTime("08:00 AM");
+      setCloseTime("09:00 PM");
+      setLicenseUrl("");
+      setPharmacistCertUrl("");
+      setLicenseFileName("");
+      setCertFileName("");
+      setDeclarationAgreed(false);
+      setStep(1);
+      setHasDraft(false);
+    }
+  };
 
   const handleScheduleChange = (days: string, open: string, close: string) => {
     setScheduleDays(days);
@@ -112,9 +230,6 @@ export default function RegisterPage() {
       { enableHighAccuracy: true, timeout: 10000 }
     );
   };
-
-  const [declarationAgreed, setDeclarationAgreed] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const validateStep = () => {
     const newErrors: Record<string, string> = {};
@@ -233,6 +348,12 @@ export default function RegisterPage() {
         accountName: formData.accountName,
       });
 
+      try {
+        if (typeof window !== "undefined") {
+          localStorage.removeItem(DRAFT_STORAGE_KEY);
+        }
+      } catch (e) {}
+
       setLoading(false);
       setSuccess(true);
     } catch (err: any) {
@@ -337,6 +458,22 @@ export default function RegisterPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Draft auto-saved indicator */}
+              {hasDraft && (
+                <div className="pt-4 border-t border-teal-700/50 flex items-center justify-between">
+                  <span className="text-[11px] text-teal-200 flex items-center gap-1.5 font-medium">
+                    <CheckCircle2 size={13} className="text-teal-300" /> Progress auto-saved
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleClearDraft}
+                    className="text-[10px] text-teal-200/70 hover:text-rose-200 underline font-semibold transition-colors"
+                  >
+                    Reset form
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
