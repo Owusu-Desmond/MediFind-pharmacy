@@ -58,6 +58,27 @@ export async function fetchApi<T>(
   return response.json() as Promise<T>;
 }
 
+export interface ApiCatalogueMedicine {
+  id: number;
+  name: string;
+  generic_name?: string;
+  strength?: string;
+  dosage_form?: string;
+  route_of_administration?: string;
+  dosage?: string;
+  dosage_instructions?: string;
+  category?: string;
+  description?: string;
+  manufacturer?: string;
+  precautions?: string;
+  side_effects?: string;
+  tags?: string;
+  image_url?: string;
+  requires_prescription?: boolean;
+  is_active: boolean;
+  active_pharmacies_count?: number;
+}
+
 export interface ApiInventoryItem {
   id: number;
   pharmacy_id: number;
@@ -67,22 +88,17 @@ export interface ApiInventoryItem {
   price: number;
   expiry_date?: string;
   status: string;
-  medicine: {
-    id: number;
-    name: string;
-    generic_name?: string;
-    dosage?: string;
-    dosage_instructions?: string;
-    category?: string;
-    description?: string;
-    manufacturer?: string;
-    precautions?: string;
-    side_effects?: string;
-    tags?: string;
-    image_url?: string;
-  };
+  is_available?: boolean;
+  medicine: ApiCatalogueMedicine;
+}
 
-
+export interface BulkAddResponse {
+  added_count: number;
+  skipped_count: number;
+  invalid_ids: number[];
+  existing_ids: number[];
+  added_items: ApiInventoryItem[];
+  message: string;
 }
 
 export interface ApiReservationItem {
@@ -227,10 +243,83 @@ export const api = {
     return fetchApi<ApiInventoryItem[]>(`/api/pharmacies/${pharmacyId}/inventory`);
   },
 
+  async getCatalogueMedicines(params?: {
+    q?: string;
+    category?: string;
+    dosage_form?: string;
+    requires_prescription?: boolean;
+    is_active?: boolean;
+    skip?: number;
+    limit?: number;
+  }) {
+    const query = new URLSearchParams();
+    if (params?.q) query.append("q", params.q);
+    if (params?.category && params.category !== "All") query.append("category", params.category);
+    if (params?.dosage_form && params.dosage_form !== "All") query.append("dosage_form", params.dosage_form);
+    if (params?.requires_prescription !== undefined) query.append("requires_prescription", String(params.requires_prescription));
+    if (params?.is_active !== undefined) query.append("is_active", String(params.is_active));
+    if (params?.skip !== undefined) query.append("skip", String(params.skip));
+    if (params?.limit !== undefined) query.append("limit", String(params.limit));
+
+    const qs = query.toString();
+    return fetchApi<ApiCatalogueMedicine[]>(`/api/medicines/${qs ? `?${qs}` : ""}`);
+  },
+
+  async getCatalogueCategories() {
+    return fetchApi<string[]>("/api/medicines/categories");
+  },
+
+  async getCatalogueDosageForms() {
+    return fetchApi<string[]>("/api/medicines/dosage-forms");
+  },
+
+  async addInventoryFromCatalogue(
+    pharmacyId: number,
+    data: {
+      medicine_id: number;
+      price: number;
+      stock_quantity: number;
+      batch_number?: string;
+      expiry_date?: string;
+      is_available?: boolean;
+    }
+  ) {
+    return fetchApi<ApiInventoryItem>(`/api/pharmacies/${pharmacyId}/inventory/add-from-catalogue`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async bulkAddInventoryFromCatalogue(
+    pharmacyId: number,
+    data: {
+      medicine_ids?: number[];
+      items?: Array<{
+        medicine_id: number;
+        price?: number;
+        stock_quantity?: number;
+        batch_number?: string;
+        expiry_date?: string;
+        is_available?: boolean;
+      }>;
+      default_price?: number;
+      default_quantity?: number;
+    }
+  ) {
+    return fetchApi<BulkAddResponse>(`/api/pharmacies/${pharmacyId}/inventory/bulk-add`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
   async addInventoryItem(
     pharmacyId: number,
     itemData: {
       name: string;
+      generic_name?: string;
+      strength?: string;
+      dosage_form?: string;
+      route_of_administration?: string;
       dosage?: string;
       dosage_instructions?: string;
       category?: string;
@@ -240,10 +329,12 @@ export const api = {
       side_effects?: string;
       tags?: string;
       image_url?: string;
+      requires_prescription?: boolean;
       batch_number?: string;
       stock_quantity: number;
       price: number;
       expiry_date?: string;
+      is_available?: boolean;
     }
   ) {
     return fetchApi<ApiInventoryItem>(`/api/pharmacies/${pharmacyId}/inventory`, {
@@ -257,6 +348,10 @@ export const api = {
     inventoryId: number,
     itemData: Partial<{
       name: string;
+      generic_name: string;
+      strength: string;
+      dosage_form: string;
+      route_of_administration: string;
       dosage: string;
       dosage_instructions: string;
       category: string;
@@ -270,6 +365,8 @@ export const api = {
       stock_quantity: number;
       price: number;
       expiry_date: string;
+      is_available: boolean;
+      requires_prescription: boolean;
     }>
   ) {
     return fetchApi<ApiInventoryItem>(`/api/pharmacies/${pharmacyId}/inventory/${inventoryId}`, {
@@ -277,8 +374,6 @@ export const api = {
       body: JSON.stringify(itemData),
     });
   },
-
-
 
   async deleteInventoryItem(pharmacyId: number, inventoryId: number) {
     return fetchApi<{ message: string }>(`/api/pharmacies/${pharmacyId}/inventory/${inventoryId}`, {

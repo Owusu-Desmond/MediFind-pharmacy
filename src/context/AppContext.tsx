@@ -5,7 +5,12 @@ import { api, getToken, removeToken, ApiInventoryItem, ApiReservation } from "@/
 
 export interface Medicine {
   id: string; // string representation of Inventory ID
+  medicineId?: number; // Central catalogue medicine ID
   name: string;
+  genericName?: string;
+  strength?: string;
+  dosageForm?: string;
+  routeOfAdministration?: string;
   dosage: string; // Dosage Strength (e.g. 500mg, 100mg/5ml)
   dosageInstructions?: string; // Detailed Schedule & Directions for use
   stockQuantity: number;
@@ -19,7 +24,9 @@ export interface Medicine {
   category?: string;
   batchNumber?: string;
   expiryDate?: string;
-  status: "In Stock" | "Low Stock" | "Out of Stock";
+  isAvailable?: boolean;
+  requiresPrescription?: boolean;
+  status: "In Stock" | "Low Stock" | "Out of Stock" | "Unavailable";
 }
 
 export interface Reservation {
@@ -97,6 +104,15 @@ interface AppContextType {
   login: (email: string, password?: string) => Promise<boolean>;
   logout: () => void;
   addMedicine: (med: Omit<Medicine, "id" | "status">) => Promise<void>;
+  addFromCatalogue: (data: {
+    medicineId: number;
+    price: number;
+    stockQuantity: number;
+    batchNumber?: string;
+    expiryDate?: string;
+    isAvailable?: boolean;
+  }) => Promise<void>;
+  bulkAddFromCatalogue: (medicineIds: number[], defaultPrice?: number, defaultQuantity?: number) => Promise<{ added_count: number; skipped_count: number; message: string }>;
   updateMedicine: (id: string, med: Partial<Medicine>) => Promise<void>;
   deleteMedicine: (id: string) => Promise<void>;
   updateReservationStatus: (id: string, status: Reservation["status"], reason?: string) => Promise<void>;
@@ -126,17 +142,25 @@ const defaultProfile: PharmacyProfile = {
 const mapApiInventoryToMedicine = (inv: ApiInventoryItem): Medicine => {
   const stockQty = inv.stock_quantity ?? 0;
   let computedStatus: Medicine["status"] = "In Stock";
-  if (stockQty <= 0) computedStatus = "Out of Stock";
+  if (inv.is_available === false) computedStatus = "Unavailable";
+  else if (stockQty <= 0) computedStatus = "Out of Stock";
   else if (stockQty <= 20) computedStatus = "Low Stock";
 
   return {
     id: String(inv.id),
+    medicineId: inv.medicine_id || inv.medicine?.id,
     name: inv.medicine?.name || "Unknown Medicine",
-    dosage: inv.medicine?.dosage || "500mg",
+    genericName: inv.medicine?.generic_name || "",
+    strength: inv.medicine?.strength || inv.medicine?.dosage || "",
+    dosageForm: inv.medicine?.dosage_form || "Tablet",
+    routeOfAdministration: inv.medicine?.route_of_administration || "Oral",
+    dosage: inv.medicine?.strength || inv.medicine?.dosage || "500mg",
     dosageInstructions: inv.medicine?.dosage_instructions || "",
     stockQuantity: stockQty,
     price: inv.price ?? 0.0,
     status: computedStatus,
+    isAvailable: inv.is_available ?? true,
+    requiresPrescription: inv.medicine?.requires_prescription ?? false,
     description: inv.medicine?.description || "",
     precautions: inv.medicine?.precautions || "",
     sideEffects: inv.medicine?.side_effects || "",
@@ -364,7 +388,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const created = await api.addInventoryItem(profile.id, {
         name: med.name,
-        dosage: med.dosage,
+        generic_name: med.genericName,
+        strength: med.strength || med.dosage,
+        dosage_form: med.dosageForm || "Tablet",
+        route_of_administration: med.routeOfAdministration || "Oral",
+        dosage: med.dosage || med.strength,
         dosage_instructions: med.dosageInstructions,
         category: med.category,
         description: med.description,
@@ -373,10 +401,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         side_effects: med.sideEffects,
         tags: med.tags,
         image_url: med.imageUrl,
+        requires_prescription: med.requiresPrescription ?? false,
         batch_number: med.batchNumber,
         stock_quantity: med.stockQuantity,
         price: med.price,
         expiry_date: med.expiryDate,
+        is_available: med.isAvailable ?? true,
       });
 
       const newMed = mapApiInventoryToMedicine(created);
@@ -397,6 +427,83 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     } catch (err: any) {
       console.error("Failed to add medicine:", err);
+      throw err;
+    }
+  };
+
+  const addFromCatalogue = async (data: {
+    medicineId: number;
+    price: number;
+    stockQuantity: number;
+    batchNumber?: string;
+    expiryDate?: string;
+    isAvailable?: boolean;
+  }) => {
+    if (!profile.id) return;
+    try {
+      const created = await api.addInventoryFromCatalogue(profile.id, {
+        medicine_id: data.medicineId,
+        price: data.price,
+        stock_quantity: data.stockQuantity,
+        batch_number: data.batchNumber,
+        expiry_date: data.expiryDate,
+        is_available: data.isAvailable ?? true,
+      });
+
+      const newMed = mapApiInventoryToMedicine(created);
+      setMedicines((prev) => [newMed, ...prev.filter((m) => m.id !== newMed.id)]);
+
+      setNotifications((prev) => [
+        {
+          id: `notif-${Date.now()}`,
+          type: "success",
+          title: "Medicine Added to Inventory",
+          message: `${newMed.name} (${newMed.strength || newMed.dosage}) added to your active stock.`,
+          time: "Just now",
+          read: false,
+        },
+        ...prev,
+      ]);
+    } catch (err: any) {
+      console.error("Failed to add from catalogue:", err);
+      throw err;
+    }
+  };
+
+  const bulkAddFromCatalogue = async (
+    medicineIds: number[],
+    defaultPrice: number = 15.0,
+    defaultQuantity: number = 50
+  ) => {
+    if (!profile.id) throw new Error("Pharmacy profile not loaded");
+    try {
+      const res = await api.bulkAddInventoryFromCatalogue(profile.id, {
+        medicine_ids: medicineIds,
+        default_price: defaultPrice,
+        default_quantity: defaultQuantity,
+      });
+
+      if (res.added_items && res.added_items.length > 0) {
+        const mapped = res.added_items.map(mapApiInventoryToMedicine);
+        const addedIds = new Set(mapped.map((m) => m.id));
+        setMedicines((prev) => [...mapped, ...prev.filter((m) => !addedIds.has(m.id))]);
+      }
+
+      setNotifications((prev) => [
+        {
+          id: `notif-${Date.now()}`,
+          type: res.added_count > 0 ? "success" : "info",
+          title: "Bulk Add Complete",
+          message: res.message,
+          time: "Just now",
+          read: false,
+        },
+        ...prev,
+      ]);
+
+      return res;
+    } catch (err: any) {
+      console.error("Failed to bulk add medicines:", err);
       throw err;
     }
   };
@@ -422,6 +529,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         stock_quantity: updatedFields.stockQuantity,
         price: updatedFields.price,
         expiry_date: updatedFields.expiryDate,
+        is_available: updatedFields.isAvailable,
       });
 
       const mapped = mapApiInventoryToMedicine(updated);
@@ -556,6 +664,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         login,
         logout,
         addMedicine,
+        addFromCatalogue,
+        bulkAddFromCatalogue,
         updateMedicine,
         deleteMedicine,
         updateReservationStatus,
