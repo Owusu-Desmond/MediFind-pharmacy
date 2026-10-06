@@ -29,7 +29,11 @@ import {
   Tag,
   Clock,
   Layers,
-  Info
+  Info,
+  ChevronLeft,
+  ChevronRight,
+  ImageIcon,
+  Upload,
 } from "lucide-react";
 
 export default function InventoryPage() {
@@ -39,12 +43,40 @@ export default function InventoryPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("All");
 
+  const [uploadingMedImage, setUploadingMedImage] = useState(false);
+  const [medImageUploadError, setMedImageUploadError] = useState("");
+
+  const handleMedImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      setMedImageUploadError("Image size exceeds 5MB limit.");
+      return;
+    }
+
+    setUploadingMedImage(true);
+    setMedImageUploadError("");
+    try {
+      const res = await api.uploadMedicineImage(file);
+      if (res?.url) {
+        setFormData((prev) => ({ ...prev, imageUrl: res.url }));
+      }
+    } catch (err: any) {
+      setMedImageUploadError(err.message || "Failed to upload image.");
+    } finally {
+      setUploadingMedImage(false);
+    }
+  };
+
   // Catalogue Browse & Bulk Add State
   const [showCatalogueModal, setShowCatalogueModal] = useState(false);
   const [showBulkAddModal, setShowBulkAddModal] = useState(false);
   const [catalogueSearch, setCatalogueSearch] = useState("");
   const [catalogueCategory, setCatalogueCategory] = useState("All");
   const [catalogueDosageForm, setCatalogueDosageForm] = useState("All");
+  const [cataloguePage, setCataloguePage] = useState(1);
+  const cataloguePageSize = 25;
   const [catalogueMedicines, setCatalogueMedicines] = useState<ApiCatalogueMedicine[]>([]);
   const [catalogueCategories, setCatalogueCategories] = useState<string[]>([]);
   const [catalogueDosageForms, setCatalogueDosageForms] = useState<string[]>([]);
@@ -113,6 +145,11 @@ export default function InventoryPage() {
     loadMeta();
   }, []);
 
+  // Reset catalogue page on filter change
+  useEffect(() => {
+    setCataloguePage(1);
+  }, [catalogueSearch, catalogueCategory, catalogueDosageForm]);
+
   // Fetch Catalogue Medicines with debounce
   const fetchCatalogue = useCallback(async () => {
     setCatalogueLoading(true);
@@ -121,7 +158,8 @@ export default function InventoryPage() {
         q: catalogueSearch,
         category: catalogueCategory,
         dosage_form: catalogueDosageForm,
-        limit: 100,
+        page: cataloguePage,
+        page_size: cataloguePageSize,
       });
       setCatalogueMedicines(data);
     } catch (err) {
@@ -129,7 +167,7 @@ export default function InventoryPage() {
     } finally {
       setCatalogueLoading(false);
     }
-  }, [catalogueSearch, catalogueCategory, catalogueDosageForm]);
+  }, [catalogueSearch, catalogueCategory, catalogueDosageForm, cataloguePage]);
 
   useEffect(() => {
     if (showCatalogueModal || showBulkAddModal) {
@@ -256,6 +294,7 @@ export default function InventoryPage() {
           batchNumber: formData.batchNumber,
           expiryDate: formData.expiryDate,
           isAvailable: formData.isAvailable,
+          imageUrl: formData.imageUrl,
         });
         setShowEditModal(false);
       } catch (err: any) {
@@ -490,9 +529,17 @@ export default function InventoryPage() {
                   <tr key={med.id} className="hover:bg-slate-50/60 transition-colors">
                     <td className="py-3.5 px-5">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center font-black shrink-0">
-                          {med.name.charAt(0)}
-                        </div>
+                        {med.imageUrl ? (
+                          <img
+                            src={med.imageUrl}
+                            alt={med.name}
+                            className="w-9 h-9 rounded-lg object-cover border border-slate-200 shrink-0 bg-slate-50"
+                          />
+                        ) : (
+                          <div className="w-9 h-9 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center font-black shrink-0 border border-teal-100">
+                            {med.name.charAt(0)}
+                          </div>
+                        )}
                         <div>
                           <div className="font-bold text-slate-800">{med.name}</div>
                           <div className="text-[10px] text-slate-400">
@@ -693,8 +740,34 @@ export default function InventoryPage() {
               )}
             </div>
 
+            {/* Pagination Controls for Catalogue Browse */}
+            <div className="px-5 py-3 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
+              <span className="text-[11px] text-slate-500 font-semibold">
+                Page {cataloguePage} • {catalogueMedicines.length} items shown
+              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setCataloguePage((p) => Math.max(1, p - 1))}
+                  disabled={cataloguePage <= 1 || catalogueLoading}
+                  className="flex items-center gap-1 px-3 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                >
+                  <ChevronLeft size={13} /> Prev
+                </button>
+                <span className="px-2 py-0.5 bg-teal-50 text-teal-800 border border-teal-200 rounded-md text-xs font-bold">
+                  {cataloguePage}
+                </span>
+                <button
+                  onClick={() => setCataloguePage((p) => p + 1)}
+                  disabled={catalogueMedicines.length < cataloguePageSize || catalogueLoading}
+                  className="flex items-center gap-1 px-3 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                >
+                  Next <ChevronRight size={13} />
+                </button>
+              </div>
+            </div>
+
             {/* Modal Footer */}
-            <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
+            <div className="p-4 border-t border-slate-100 bg-white flex items-center justify-between">
               <span className="text-[11px] text-slate-400 font-semibold">
                 Can't find a medicine? Use the Custom Medicine option.
               </span>
@@ -951,8 +1024,34 @@ export default function InventoryPage() {
               )}
             </div>
 
+            {/* Pagination Controls for Bulk Add */}
+            <div className="px-5 py-2.5 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
+              <span className="text-[11px] text-slate-500 font-semibold">
+                Page {cataloguePage} • {catalogueMedicines.length} items shown
+              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setCataloguePage((p) => Math.max(1, p - 1))}
+                  disabled={cataloguePage <= 1 || catalogueLoading}
+                  className="flex items-center gap-1 px-3 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                >
+                  <ChevronLeft size={13} /> Prev
+                </button>
+                <span className="px-2 py-0.5 bg-teal-50 text-teal-800 border border-teal-200 rounded-md text-xs font-bold">
+                  {cataloguePage}
+                </span>
+                <button
+                  onClick={() => setCataloguePage((p) => p + 1)}
+                  disabled={catalogueMedicines.length < cataloguePageSize || catalogueLoading}
+                  className="flex items-center gap-1 px-3 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                >
+                  Next <ChevronRight size={13} />
+                </button>
+              </div>
+            </div>
+
             {/* Bulk Footer */}
-            <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
+            <div className="p-4 border-t border-slate-100 bg-white flex items-center justify-between">
               <span className="text-xs font-bold text-slate-700">
                 {bulkSelectedIds.length} medicines selected
               </span>
@@ -1034,6 +1133,51 @@ export default function InventoryPage() {
                     onChange={(e) => setFormData((prev) => ({ ...prev, expiryDate: e.target.value }))}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs"
                   />
+                </div>
+              </div>
+
+              {/* Medicine Product Image */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                <label className="text-slate-700 block font-bold text-[11px] uppercase tracking-wider">Product Photo (Optional)</label>
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-xl bg-white border border-slate-200 overflow-hidden flex items-center justify-center shrink-0">
+                    {formData.imageUrl ? (
+                      <img src={formData.imageUrl} alt="Medicine preview" className="w-full h-full object-cover" />
+                    ) : (
+                      <ImageIcon className="text-slate-400" size={18} />
+                    )}
+                  </div>
+                  <div className="flex-1 space-y-1.5">
+                    <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold rounded-lg transition-colors">
+                      {uploadingMedImage ? (
+                        <>
+                          <Loader2 size={12} className="animate-spin text-teal-600" />
+                          <span>Uploading...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload size={12} className="text-teal-600" />
+                          <span>Upload Photo</span>
+                        </>
+                      )}
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/jpg"
+                        disabled={uploadingMedImage}
+                        onChange={handleMedImageUpload}
+                        className="hidden"
+                      />
+                    </label>
+                    {formData.imageUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setFormData((prev) => ({ ...prev, imageUrl: "" }))}
+                        className="ml-2 text-xs font-bold text-rose-600 hover:text-rose-700"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -1230,6 +1374,60 @@ export default function InventoryPage() {
                       onChange={(e) => setFormData((prev) => ({ ...prev, manufacturer: e.target.value }))}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-600"
                     />
+                  </div>
+                </div>
+
+                {/* Custom Medicine Product Photo */}
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                  <label className="text-slate-700 block font-bold text-[11px] uppercase tracking-wider">Product Photo (Optional)</label>
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-white border border-slate-200 overflow-hidden flex items-center justify-center shrink-0">
+                      {formData.imageUrl ? (
+                        <img src={formData.imageUrl} alt="Medicine preview" className="w-full h-full object-cover" />
+                      ) : (
+                        <ImageIcon className="text-slate-400" size={18} />
+                      )}
+                    </div>
+                    <div className="flex-1 space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold rounded-lg transition-colors">
+                          {uploadingMedImage ? (
+                            <>
+                              <Loader2 size={12} className="animate-spin text-teal-600" />
+                              <span>Uploading...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Upload size={12} className="text-teal-600" />
+                              <span>Upload Photo</span>
+                            </>
+                          )}
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp,image/jpg"
+                            disabled={uploadingMedImage}
+                            onChange={handleMedImageUpload}
+                            className="hidden"
+                          />
+                        </label>
+                        {formData.imageUrl && (
+                          <button
+                            type="button"
+                            onClick={() => setFormData((prev) => ({ ...prev, imageUrl: "" }))}
+                            className="text-xs font-bold text-rose-600 hover:text-rose-700"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        type="url"
+                        placeholder="Or paste medicine image URL..."
+                        value={formData.imageUrl}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, imageUrl: e.target.value }))}
+                        className="w-full px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs"
+                      />
+                    </div>
                   </div>
                 </div>
 

@@ -228,6 +228,15 @@ export const api = {
     });
   },
 
+  async uploadPharmacyImage(file: File) {
+    const data = new FormData();
+    data.append("file", file);
+    return fetchApi<{ url: string; filename: string }>("/api/pharmacies/upload-pharmacy-image", {
+      method: "POST",
+      body: data,
+    });
+  },
+
   async getMyPharmacy() {
     return fetchApi<any>("/api/pharmacies/my-pharmacy");
   },
@@ -249,6 +258,8 @@ export const api = {
     dosage_form?: string;
     requires_prescription?: boolean;
     is_active?: boolean;
+    page?: number;
+    page_size?: number;
     skip?: number;
     limit?: number;
   }) {
@@ -258,6 +269,8 @@ export const api = {
     if (params?.dosage_form && params.dosage_form !== "All") query.append("dosage_form", params.dosage_form);
     if (params?.requires_prescription !== undefined) query.append("requires_prescription", String(params.requires_prescription));
     if (params?.is_active !== undefined) query.append("is_active", String(params.is_active));
+    if (params?.page !== undefined) query.append("page", String(params.page));
+    if (params?.page_size !== undefined) query.append("page_size", String(params.page_size));
     if (params?.skip !== undefined) query.append("skip", String(params.skip));
     if (params?.limit !== undefined) query.append("limit", String(params.limit));
 

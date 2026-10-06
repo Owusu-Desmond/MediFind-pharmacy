@@ -83,6 +83,8 @@ export interface PharmacyProfile {
   mobileMoneyProvider?: string;
   mobileMoneyNumber?: string;
   paymentAccountVerified?: boolean;
+  imageUrl?: string;
+  logoUrl?: string;
 }
 
 interface Notification {
@@ -308,6 +310,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           deliveryOffered: pharmacy.delivery_offered ?? true,
           isActive: pharmacy.status === "Approved",
           pharmacistName: pharmacy.pharmacist_name || me.name,
+          imageUrl: pharmacy.image_url || undefined,
+          logoUrl: pharmacy.logo_url || undefined,
         };
         setProfile(pharmacyProfile);
 
@@ -639,6 +643,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           email: updatedFields.email,
           opening_hours: updatedFields.openingHours,
           delivery_offered: updatedFields.deliveryOffered,
+          image_url: updatedFields.imageUrl,
+          logo_url: updatedFields.logoUrl,
         });
       } catch (err: any) {
         console.error("Failed to update pharmacy profile:", err);

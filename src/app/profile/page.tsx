@@ -22,7 +22,10 @@ import {
   EyeOff,
   Plus,
   Loader2,
-  ShieldCheck
+  ShieldCheck,
+  ImageIcon,
+  Upload,
+  Camera
 } from "lucide-react";
 
 interface StaffMember {
@@ -49,7 +52,30 @@ export default function ProfilePage() {
     deliveryOffered: profile.deliveryOffered,
     gpsCoordinates: profile.gpsCoordinates || "",
     pharmacistName: profile.pharmacistName || "",
+    imageUrl: profile.imageUrl || "",
+    logoUrl: profile.logoUrl || "",
   });
+
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imageUploadError, setImageUploadError] = useState("");
+
+  useEffect(() => {
+    if (profile) {
+      setFormData((prev) => ({
+        ...prev,
+        name: profile.name || prev.name,
+        email: profile.email || prev.email,
+        phone: profile.phone || prev.phone,
+        location: profile.location || prev.location,
+        openingHours: profile.openingHours || prev.openingHours,
+        deliveryOffered: profile.deliveryOffered ?? prev.deliveryOffered,
+        gpsCoordinates: profile.gpsCoordinates || prev.gpsCoordinates,
+        pharmacistName: profile.pharmacistName || prev.pharmacistName,
+        imageUrl: profile.imageUrl || prev.imageUrl,
+        logoUrl: profile.logoUrl || prev.logoUrl,
+      }));
+    }
+  }, [profile]);
 
   // Password Change State
   const [currentPassword, setCurrentPassword] = useState("");
@@ -169,6 +195,29 @@ export default function ProfilePage() {
     }
   };
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: "imageUrl" | "logoUrl" = "imageUrl") => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      setImageUploadError("Image file size exceeds 5MB limit.");
+      return;
+    }
+
+    setUploadingImage(true);
+    setImageUploadError("");
+    try {
+      const res = await api.uploadPharmacyImage(file);
+      if (res?.url) {
+        setFormData((prev) => ({ ...prev, [field]: res.url }));
+      }
+    } catch (err: any) {
+      setImageUploadError(err.message || "Failed to upload image. Please try again.");
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaveSuccess(false);
@@ -269,7 +318,109 @@ export default function ProfilePage() {
 
       {/* Profile Form */}
       <form onSubmit={handleSubmit} className="space-y-6">
-        
+
+        {/* Section 0: Pharmacy Storefront & Branding Photo */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-5">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h3 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
+              <Camera className="text-teal-700" size={16} />
+              Pharmacy Storefront & Brand Photo
+            </h3>
+            <span className="text-[11px] font-bold text-teal-700 bg-teal-50 border border-teal-200 px-2.5 py-0.5 rounded-full">
+              Shown in Patient App
+            </span>
+          </div>
+
+          <p className="text-xs text-slate-500 font-medium">
+            Upload a clear photo of your pharmacy storefront, premises, or brand logo. Patients will see this photo when discovering your pharmacy and placing medicine reservations.
+          </p>
+
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 pt-2">
+            {/* Image Preview Box */}
+            <div className="relative w-36 h-28 rounded-2xl bg-slate-100 border-2 border-dashed border-slate-200 overflow-hidden flex items-center justify-center shrink-0 shadow-inner group">
+              {formData.imageUrl ? (
+                <>
+                  <img
+                    src={formData.imageUrl}
+                    alt="Pharmacy Storefront"
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setFormData((prev) => ({ ...prev, imageUrl: "" }))}
+                      className="p-1.5 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors shadow-sm"
+                      title="Remove image"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center p-3">
+                  <ImageIcon className="mx-auto text-slate-400 mb-1" size={24} />
+                  <span className="text-[10px] text-slate-400 font-bold block">No photo uploaded</span>
+                </div>
+              )}
+            </div>
+
+            {/* Upload Controls */}
+            <div className="flex-1 space-y-3 w-full">
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-800 text-xs font-bold rounded-xl transition-colors">
+                  {uploadingImage ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin text-teal-700" />
+                      <span>Uploading to Cloud...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload size={14} className="text-teal-700" />
+                      <span>Upload Storefront Photo</span>
+                    </>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/jpg"
+                    disabled={uploadingImage}
+                    onChange={(e) => handleImageUpload(e, "imageUrl")}
+                    className="hidden"
+                  />
+                </label>
+
+                {formData.imageUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setFormData((prev) => ({ ...prev, imageUrl: "" }))}
+                    className="text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-3 py-1.5 rounded-lg border border-transparent hover:border-rose-100 transition-all"
+                  >
+                    Clear Photo
+                  </button>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                  Or Image URL (Web link)
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://images.unsplash.com/photo-... or custom URL"
+                  value={formData.imageUrl}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, imageUrl: e.target.value }))}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-teal-600 focus:bg-white"
+                />
+              </div>
+
+              {imageUploadError && (
+                <p className="text-xs text-rose-600 font-bold bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-lg">
+                  {imageUploadError}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* Section 1: Store & Contact details */}
         <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-5">
           <h3 className="font-extrabold text-slate-800 text-sm flex items-center gap-2 border-b border-slate-100 pb-3">
