@@ -4,6 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { useApp } from "@/context/AppContext";
 import { SkeletonMetrics, SkeletonTable } from "@/components/Skeleton";
+import NotificationPermissionBanner from "@/components/NotificationPermissionBanner";
 import { 
   ClipboardList, 
   Activity, 
@@ -12,17 +13,36 @@ import {
   Check,
   X,
   Clock,
-  ArrowRight
+  ArrowRight,
+  Loader2
 } from "lucide-react";
 
 export default function DashboardPage() {
   const { 
+    user,
     reservations, 
     medicines, 
     profile, 
     updateReservationStatus,
     loading 
   } = useApp();
+
+  const [quickUpdatingId, setQuickUpdatingId] = React.useState<string | null>(null);
+  const [quickActionType, setQuickActionType] = React.useState<string | null>(null);
+
+  const handleQuickStatus = async (id: string, status: "Confirmed" | "Cancelled") => {
+    if (quickUpdatingId) return;
+    try {
+      setQuickUpdatingId(id);
+      setQuickActionType(status);
+      await updateReservationStatus(id, status);
+    } catch (err: any) {
+      alert(err.message || "Failed to update reservation");
+    } finally {
+      setQuickUpdatingId(null);
+      setQuickActionType(null);
+    }
+  };
 
   // Compute metrics
   const totalReservations = reservations.length;
@@ -69,7 +89,7 @@ export default function DashboardPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gradient-to-r from-teal-900 to-primary p-6 rounded-2xl text-white shadow-lg shadow-teal-900/20">
         <div>
           <h2 className="text-2xl font-extrabold tracking-tight font-headline">
-            Welcome Back, {profile.pharmacistName ? profile.pharmacistName.split(",")[0] : "Doctor"}!
+            Welcome Back, {user?.name ? user.name.split(",")[0] : (profile.pharmacistName ? profile.pharmacistName.split(",")[0] : "Doctor")}!
           </h2>
           <p className="text-teal-100/80 text-xs mt-1 font-semibold">
             {profile.name} • Licensing Council Status: Active Verification
@@ -80,6 +100,9 @@ export default function DashboardPage() {
           Receiving Live Patient Bookings
         </div>
       </div>
+
+      {/* Desktop Notification Enable Banner */}
+      <NotificationPermissionBanner />
 
       {/* Grid Statistics Metrics */}
       {loading ? (
@@ -318,18 +341,28 @@ export default function DashboardPage() {
                     <td className="py-4 px-4">
                       <div className="flex items-center justify-center gap-2">
                         <button
-                          onClick={() => updateReservationStatus(res.id, "Confirmed")}
+                          onClick={() => handleQuickStatus(res.id, "Confirmed")}
+                          disabled={Boolean(quickUpdatingId)}
                           title="Confirm Reservation"
-                          className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white flex items-center justify-center transition-all shadow-sm border border-emerald-100"
+                          className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white flex items-center justify-center transition-all shadow-sm border border-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          <Check size={16} className="stroke-[2.5]" />
+                          {quickUpdatingId === res.id && quickActionType === "Confirmed" ? (
+                            <Loader2 size={15} className="animate-spin stroke-[2.5]" />
+                          ) : (
+                            <Check size={16} className="stroke-[2.5]" />
+                          )}
                         </button>
                         <button
-                          onClick={() => updateReservationStatus(res.id, "Cancelled")}
+                          onClick={() => handleQuickStatus(res.id, "Cancelled")}
+                          disabled={Boolean(quickUpdatingId)}
                           title="Reject Reservation"
-                          className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white flex items-center justify-center transition-all shadow-sm border border-rose-100"
+                          className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white flex items-center justify-center transition-all shadow-sm border border-rose-100 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          <X size={16} className="stroke-[2.5]" />
+                          {quickUpdatingId === res.id && quickActionType === "Cancelled" ? (
+                            <Loader2 size={15} className="animate-spin stroke-[2.5]" />
+                          ) : (
+                            <X size={16} className="stroke-[2.5]" />
+                          )}
                         </button>
                       </div>
                     </td>

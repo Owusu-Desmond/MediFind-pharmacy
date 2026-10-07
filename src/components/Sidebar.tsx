@@ -15,7 +15,7 @@ import {
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { logout, profile } = useApp();
+  const { logout, profile, user } = useApp();
 
   const navItems = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -74,7 +74,7 @@ export default function Sidebar() {
           </div>
           <div className="overflow-hidden">
             <h4 className="text-xs font-bold text-teal-500 uppercase tracking-wide truncate">
-              {profile.pharmacistName || "Pharmacist"}
+              {user?.name || profile.pharmacistName || "Pharmacist"}
             </h4>
             <p className="text-[11px] text-teal-300 truncate">{profile.email}</p>
           </div>

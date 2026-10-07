@@ -16,7 +16,8 @@ import {
   UserCheck,
   ClipboardList,
   Package,
-  Truck
+  Truck,
+  Loader2
 } from "lucide-react";
 
 export default function ReservationsPage() {
@@ -26,6 +27,34 @@ export default function ReservationsPage() {
   );
   const [filter, setFilter] = useState<string>("All");
   const [confirmingCash, setConfirmingCash] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
+  const [targetActionStatus, setTargetActionStatus] = useState<string | null>(null);
+
+  const handleStatusChange = async (id: string, status: Reservation["status"], reason?: string) => {
+    if (updatingStatus || confirmingCash) return;
+    try {
+      setUpdatingStatus(id);
+      setTargetActionStatus(status);
+      await updateReservationStatus(id, status, reason);
+    } catch (err: any) {
+      alert(err.message || "Failed to update reservation status");
+    } finally {
+      setUpdatingStatus(null);
+      setTargetActionStatus(null);
+    }
+  };
+
+  const handleMarkCash = async (id: string) => {
+    if (confirmingCash || updatingStatus) return;
+    try {
+      setConfirmingCash(true);
+      await markCashPaid(id);
+    } catch (err: any) {
+      alert(err.message || "Failed to confirm cash payment");
+    } finally {
+      setConfirmingCash(false);
+    }
+  };
 
   // Rejection modal state
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
@@ -56,8 +85,8 @@ export default function ReservationsPage() {
       selectedReasonOption === "Other reason (specify below)"
         ? customReasonText.trim() || "Reservation cancelled by pharmacy"
         : customReasonText.trim()
-        ? `${selectedReasonOption} - ${customReasonText.trim()}`
-        : selectedReasonOption;
+          ? `${selectedReasonOption} - ${customReasonText.trim()}`
+          : selectedReasonOption;
 
     try {
       setSubmittingRejection(true);
@@ -112,18 +141,6 @@ export default function ReservationsPage() {
     }
   };
 
-  const handleMarkCash = async (id: string) => {
-    if (confirmingCash) return;
-    try {
-      setConfirmingCash(true);
-      await markCashPaid(id);
-    } catch (err: any) {
-      alert(err.message || "Failed to confirm cash payment");
-    } finally {
-      setConfirmingCash(false);
-    }
-  };
-
   return (
     <div className="h-[calc(100vh-140px)] flex flex-col md:flex-row gap-8 select-none relative">
 
@@ -141,8 +158,8 @@ export default function ReservationsPage() {
                 key={tab}
                 onClick={() => setFilter(tab)}
                 className={`flex-1 py-1 rounded-lg text-[10px] font-bold transition-all select-none ${filter === tab
-                    ? "bg-white text-primary shadow-sm"
-                    : "text-slate-500 hover:text-slate-800"
+                  ? "bg-white text-primary shadow-sm"
+                  : "text-slate-500 hover:text-slate-800"
                   }`}
               >
                 {tab}
@@ -165,8 +182,8 @@ export default function ReservationsPage() {
                 key={res.id}
                 onClick={() => setSelectedResId(res.id)}
                 className={`p-4 cursor-pointer transition-all border-l-4 ${selectedResId === res.id
-                    ? "bg-teal-50/20 border-primary"
-                    : "border-transparent hover:bg-slate-50/50"
+                  ? "bg-teal-50/20 border-primary"
+                  : "border-transparent hover:bg-slate-50/50"
                   }`}
               >
                 <div className="flex justify-between items-start gap-1">
@@ -358,15 +375,25 @@ export default function ReservationsPage() {
                 <>
                   <button
                     onClick={() => openRejectModal(selectedRes.id)}
-                    className="flex items-center gap-1.5 px-4.5 py-2 border border-rose-200 text-rose-600 font-bold rounded-xl text-xs hover:bg-rose-50 transition-colors"
+                    disabled={Boolean(updatingStatus) || confirmingCash || submittingRejection}
+                    className="flex items-center gap-1.5 px-4 py-2 border border-rose-200 text-rose-600 font-bold rounded-xl text-xs hover:bg-rose-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <X size={15} className="stroke-[2.5]" /> Reject Reservation
                   </button>
                   <button
-                    onClick={() => updateReservationStatus(selectedRes.id, "Confirmed")}
-                    className="flex items-center gap-1.5 px-4.5 py-2 bg-primary hover:bg-teal-800 text-white font-bold rounded-xl text-xs shadow-md shadow-teal-700/20 transition-all"
+                    onClick={() => handleStatusChange(selectedRes.id, "Confirmed")}
+                    disabled={Boolean(updatingStatus) || confirmingCash || submittingRejection}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-primary hover:bg-teal-800 text-white font-bold rounded-xl text-xs shadow-md shadow-teal-700/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <Check size={15} className="stroke-[2.5]" /> Confirm Booking
+                    {updatingStatus === selectedRes.id && targetActionStatus === "Confirmed" ? (
+                      <>
+                        <Loader2 size={15} className="animate-spin stroke-[2.5]" /> Confirming...
+                      </>
+                    ) : (
+                      <>
+                        <Check size={15} className="stroke-[2.5]" /> Confirm Booking
+                      </>
+                    )}
                   </button>
                 </>
               )}
@@ -376,24 +403,43 @@ export default function ReservationsPage() {
                 <>
                   <button
                     onClick={() => openRejectModal(selectedRes.id)}
-                    className="flex items-center gap-1.5 px-4.5 py-2 border border-slate-200 text-slate-500 font-bold rounded-xl text-xs hover:bg-slate-50 transition-colors"
+                    disabled={Boolean(updatingStatus) || confirmingCash || submittingRejection}
+                    className="flex items-center gap-1.5 px-4 py-2 border border-slate-200 text-slate-500 font-bold rounded-xl text-xs hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <X size={15} className="stroke-[2.5]" /> Cancel Reservation
                   </button>
 
                   {selectedRes.fulfillmentMethod === "Delivery" ? (
                     <button
-                      onClick={() => updateReservationStatus(selectedRes.id, "Preparing")}
-                      className="flex items-center gap-1.5 px-4.5 py-2 bg-primary hover:bg-teal-800 text-white font-bold rounded-xl text-xs shadow-md shadow-teal-700/20 transition-all"
+                      onClick={() => handleStatusChange(selectedRes.id, "Preparing")}
+                      disabled={Boolean(updatingStatus) || confirmingCash || submittingRejection}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-primary hover:bg-teal-800 text-white font-bold rounded-xl text-xs shadow-md shadow-teal-700/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <Package size={15} className="stroke-[2.5]" /> Start Preparing Order
+                      {updatingStatus === selectedRes.id && targetActionStatus === "Preparing" ? (
+                        <>
+                          <Loader2 size={15} className="animate-spin stroke-[2.5]" /> Starting Prep...
+                        </>
+                      ) : (
+                        <>
+                          <Package size={15} className="stroke-[2.5]" /> Start Preparing Order
+                        </>
+                      )}
                     </button>
                   ) : (
                     <button
-                      onClick={() => updateReservationStatus(selectedRes.id, "Ready for Pickup")}
-                      className="flex items-center gap-1.5 px-4.5 py-2 bg-primary hover:bg-teal-800 text-white font-bold rounded-xl text-xs shadow-md shadow-teal-700/20 transition-all"
+                      onClick={() => handleStatusChange(selectedRes.id, "Ready for Pickup")}
+                      disabled={Boolean(updatingStatus) || confirmingCash || submittingRejection}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-primary hover:bg-teal-800 text-white font-bold rounded-xl text-xs shadow-md shadow-teal-700/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <Check size={15} className="stroke-[2.5]" /> Mark Ready for Pickup
+                      {updatingStatus === selectedRes.id && targetActionStatus === "Ready for Pickup" ? (
+                        <>
+                          <Loader2 size={15} className="animate-spin stroke-[2.5]" /> Updating...
+                        </>
+                      ) : (
+                        <>
+                          <Check size={15} className="stroke-[2.5]" /> Mark Ready for Pickup
+                        </>
+                      )}
                     </button>
                   )}
                 </>
@@ -404,15 +450,25 @@ export default function ReservationsPage() {
                 <>
                   <button
                     onClick={() => openRejectModal(selectedRes.id)}
-                    className="flex items-center gap-1.5 px-4.5 py-2 border border-slate-200 text-slate-500 font-bold rounded-xl text-xs hover:bg-slate-50 transition-colors"
+                    disabled={Boolean(updatingStatus) || confirmingCash || submittingRejection}
+                    className="flex items-center gap-1.5 px-4 py-2 border border-slate-200 text-slate-500 font-bold rounded-xl text-xs hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <X size={15} className="stroke-[2.5]" /> Cancel Reservation
                   </button>
                   <button
-                    onClick={() => updateReservationStatus(selectedRes.id, "Out for Delivery")}
-                    className="flex items-center gap-1.5 px-4.5 py-2 bg-primary hover:bg-teal-800 text-white font-bold rounded-xl text-xs shadow-md shadow-teal-700/20 transition-all"
+                    onClick={() => handleStatusChange(selectedRes.id, "Out for Delivery")}
+                    disabled={Boolean(updatingStatus) || confirmingCash || submittingRejection}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-primary hover:bg-teal-800 text-white font-bold rounded-xl text-xs shadow-md shadow-teal-700/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <Truck size={15} className="stroke-[2.5]" /> Dispatch / Out for Delivery
+                    {updatingStatus === selectedRes.id && targetActionStatus === "Out for Delivery" ? (
+                      <>
+                        <Loader2 size={15} className="animate-spin stroke-[2.5]" /> Dispatching...
+                      </>
+                    ) : (
+                      <>
+                        <Truck size={15} className="stroke-[2.5]" /> Dispatch / Out for Delivery
+                      </>
+                    )}
                   </button>
                 </>
               )}
@@ -423,17 +479,34 @@ export default function ReservationsPage() {
                   {selectedRes.paymentMethod === "CASH" && selectedRes.paymentStatus !== "PAID" ? (
                     <button
                       onClick={() => handleMarkCash(selectedRes.id)}
-                      disabled={confirmingCash}
-                      className="flex items-center gap-1.5 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-md shadow-emerald-700/20 transition-all"
+                      disabled={confirmingCash || Boolean(updatingStatus) || submittingRejection}
+                      className="flex items-center gap-1.5 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-md shadow-emerald-700/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <Check size={15} className="stroke-[2.5]" /> Collect Cash & Mark Delivered
+                      {confirmingCash ? (
+                        <>
+                          <Loader2 size={15} className="animate-spin stroke-[2.5]" /> Recording Payment...
+                        </>
+                      ) : (
+                        <>
+                          <Check size={15} className="stroke-[2.5]" /> Collect Cash & Mark Delivered
+                        </>
+                      )}
                     </button>
                   ) : (
                     <button
-                      onClick={() => updateReservationStatus(selectedRes.id, "Delivered")}
-                      className="flex items-center gap-1.5 px-4.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-md shadow-emerald-700/20 transition-all"
+                      onClick={() => handleStatusChange(selectedRes.id, "Delivered")}
+                      disabled={Boolean(updatingStatus) || confirmingCash || submittingRejection}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-md shadow-emerald-700/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <UserCheck size={15} className="stroke-[2.5]" /> Mark as Delivered
+                      {updatingStatus === selectedRes.id && targetActionStatus === "Delivered" ? (
+                        <>
+                          <Loader2 size={15} className="animate-spin stroke-[2.5]" /> Completing...
+                        </>
+                      ) : (
+                        <>
+                          <UserCheck size={15} className="stroke-[2.5]" /> Mark as Delivered
+                        </>
+                      )}
                     </button>
                   )}
                 </>
@@ -445,17 +518,34 @@ export default function ReservationsPage() {
                   {selectedRes.paymentMethod === "CASH" && selectedRes.paymentStatus !== "PAID" ? (
                     <button
                       onClick={() => handleMarkCash(selectedRes.id)}
-                      disabled={confirmingCash}
-                      className="flex items-center gap-1.5 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-md shadow-emerald-700/20 transition-all"
+                      disabled={confirmingCash || Boolean(updatingStatus) || submittingRejection}
+                      className="flex items-center gap-1.5 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-md shadow-emerald-700/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <Check size={15} className="stroke-[2.5]" /> Collect Cash & Complete Pickup
+                      {confirmingCash ? (
+                        <>
+                          <Loader2 size={15} className="animate-spin stroke-[2.5]" /> Recording Payment...
+                        </>
+                      ) : (
+                        <>
+                          <Check size={15} className="stroke-[2.5]" /> Collect Cash & Complete Pickup
+                        </>
+                      )}
                     </button>
                   ) : (
                     <button
-                      onClick={() => updateReservationStatus(selectedRes.id, "Picked Up")}
-                      className="flex items-center gap-1.5 px-4.5 py-2 bg-primary hover:bg-teal-800 text-white font-bold rounded-xl text-xs shadow-md shadow-teal-700/20 transition-all"
+                      onClick={() => handleStatusChange(selectedRes.id, "Picked Up")}
+                      disabled={Boolean(updatingStatus) || confirmingCash || submittingRejection}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-primary hover:bg-teal-800 text-white font-bold rounded-xl text-xs shadow-md shadow-teal-700/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <UserCheck size={15} className="stroke-[2.5]" /> Complete Pickup
+                      {updatingStatus === selectedRes.id && targetActionStatus === "Picked Up" ? (
+                        <>
+                          <Loader2 size={15} className="animate-spin stroke-[2.5]" /> Completing...
+                        </>
+                      ) : (
+                        <>
+                          <UserCheck size={15} className="stroke-[2.5]" /> Complete Pickup
+                        </>
+                      )}
                     </button>
                   )}
                 </>
@@ -509,11 +599,10 @@ export default function ReservationsPage() {
                     key={preset}
                     type="button"
                     onClick={() => setSelectedReasonOption(preset)}
-                    className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-semibold border transition-all flex items-center justify-between ${
-                      selectedReasonOption === preset
+                    className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-semibold border transition-all flex items-center justify-between ${selectedReasonOption === preset
                         ? "bg-teal-50 border-primary text-teal-900"
                         : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
-                    }`}
+                      }`}
                   >
                     <span>{preset}</span>
                     <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${selectedReasonOption === preset ? "border-primary bg-primary" : "border-slate-300"}`}>

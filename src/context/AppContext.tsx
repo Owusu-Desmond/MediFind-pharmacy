@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { api, getToken, removeToken, ApiInventoryItem, ApiReservation, BackendNotification } from "@/services/api";
+import { browserNotifications } from "@/utils/browserNotifications";
 
 export interface Medicine {
   id: string; // string representation of Inventory ID
@@ -416,18 +417,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [loadBackendData]);
 
-  // Periodic notification polling every 25 seconds
+  // Periodic notification polling every 15 seconds with Web Push and audio chime alerts
   useEffect(() => {
-    const interval = setInterval(() => {
+    let prevUnreadIds = new Set<string>();
+    let isFirstFetch = true;
+
+    const checkNotifications = async () => {
       const token = getToken();
-      if (token) {
-        api.getNotifications()
-          .then((res) => {
-            setNotifications((res.items || []).map(mapApiNotificationToNotification));
-          })
-          .catch(() => {});
+      if (!token) return;
+
+      try {
+        const res = await api.getNotifications(false, 30);
+        const mapped = (res.items || []).map(mapApiNotificationToNotification);
+        setNotifications(mapped);
+
+        const currentUnread = mapped.filter((n) => !n.read);
+
+        if (!isFirstFetch) {
+          // Check for any new unread notification that arrived since last poll
+          for (const item of currentUnread) {
+            if (!prevUnreadIds.has(item.id)) {
+              // Trigger real OS Desktop Notification + Audio Chime
+              const isOrder =
+                item.title.toLowerCase().includes("reservation") ||
+                item.title.toLowerCase().includes("order") ||
+                item.title.toLowerCase().includes("prescription");
+
+              browserNotifications.showNotification(item.title, {
+                body: item.message,
+                id: item.id,
+                sound: true,
+                soundType: isOrder ? "order" : "alert",
+                url: item.actionUrl || "/reservations",
+              });
+            }
+          }
+        }
+
+        prevUnreadIds = new Set(currentUnread.map((n) => n.id));
+        isFirstFetch = false;
+      } catch (e) {
+        // silent fail on network glitch
       }
-    }, 25000);
+    };
+
+    // Initial check
+    checkNotifications();
+
+    const interval = setInterval(checkNotifications, 15000);
     return () => clearInterval(interval);
   }, []);
 
