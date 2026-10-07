@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useApp, Medicine } from "@/context/AppContext";
 import { api, ApiCatalogueMedicine } from "@/services/api";
@@ -150,33 +150,49 @@ export default function InventoryPage() {
     setCataloguePage(1);
   }, [catalogueSearch, catalogueCategory, catalogueDosageForm]);
 
-  // Fetch Catalogue Medicines with debounce
-  const fetchCatalogue = useCallback(async () => {
-    setCatalogueLoading(true);
-    try {
-      const data = await api.getCatalogueMedicines({
-        q: catalogueSearch,
-        category: catalogueCategory,
-        dosage_form: catalogueDosageForm,
-        page: cataloguePage,
-        page_size: cataloguePageSize,
-      });
-      setCatalogueMedicines(data);
-    } catch (err) {
-      console.error("Failed to fetch catalogue medicines:", err);
-    } finally {
-      setCatalogueLoading(false);
-    }
-  }, [catalogueSearch, catalogueCategory, catalogueDosageForm, cataloguePage]);
+  const catalogueAbortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (showCatalogueModal || showBulkAddModal) {
-      const timer = setTimeout(() => {
-        fetchCatalogue();
-      }, 250);
-      return () => clearTimeout(timer);
+      if (catalogueAbortControllerRef.current) {
+        catalogueAbortControllerRef.current.abort();
+        catalogueAbortControllerRef.current = null;
+      }
+
+      const controller = new AbortController();
+      catalogueAbortControllerRef.current = controller;
+
+      const timer = setTimeout(async () => {
+        setCatalogueLoading(true);
+        try {
+          const data = await api.getCatalogueMedicines({
+            q: catalogueSearch,
+            category: catalogueCategory,
+            dosage_form: catalogueDosageForm,
+            page: cataloguePage,
+            page_size: cataloguePageSize,
+            signal: controller.signal,
+          } as any);
+          if (!controller.signal.aborted) {
+            setCatalogueMedicines(data);
+          }
+        } catch (err: any) {
+          if (err?.name !== "AbortError" && !controller.signal.aborted) {
+            console.error("Failed to fetch catalogue medicines:", err);
+          }
+        } finally {
+          if (!controller.signal.aborted) {
+            setCatalogueLoading(false);
+          }
+        }
+      }, 200);
+
+      return () => {
+        clearTimeout(timer);
+        controller.abort();
+      };
     }
-  }, [showCatalogueModal, showBulkAddModal, fetchCatalogue]);
+  }, [showCatalogueModal, showBulkAddModal, catalogueSearch, catalogueCategory, catalogueDosageForm, cataloguePage]);
 
   // Set of medicine IDs already in pharmacy inventory
   const inventoryMedicineIds = new Set(

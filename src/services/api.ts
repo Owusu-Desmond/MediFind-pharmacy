@@ -275,7 +275,7 @@ export const api = {
     if (params?.limit !== undefined) query.append("limit", String(params.limit));
 
     const qs = query.toString();
-    return fetchApi<ApiCatalogueMedicine[]>(`/api/medicines/${qs ? `?${qs}` : ""}`);
+    return fetchApi<ApiCatalogueMedicine[]>(`/api/medicines/${qs ? `?${qs}` : ""}`, { signal: (params as any)?.signal });
   },
 
   async getCatalogueCategories() {
