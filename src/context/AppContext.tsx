@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { api, getToken, removeToken, ApiInventoryItem, ApiReservation } from "@/services/api";
+import { api, getToken, removeToken, ApiInventoryItem, ApiReservation, BackendNotification } from "@/services/api";
 
 export interface Medicine {
   id: string; // string representation of Inventory ID
@@ -87,13 +87,19 @@ export interface PharmacyProfile {
   logoUrl?: string;
 }
 
-interface Notification {
+export interface Notification {
   id: string;
+  numericId?: number;
   type: "info" | "success" | "warning";
+  notificationType?: string;
   title: string;
   message: string;
   time: string;
   read: boolean;
+  priority?: string;
+  actionUrl?: string;
+  referenceType?: string;
+  referenceId?: string;
 }
 
 interface AppContextType {
@@ -120,7 +126,8 @@ interface AppContextType {
   updateReservationStatus: (id: string, status: Reservation["status"], reason?: string) => Promise<void>;
   markCashPaid: (id: string) => Promise<void>;
   updateProfile: (updatedProfile: Partial<PharmacyProfile>) => Promise<void>;
-  markNotificationRead: (id: string) => void;
+  markNotificationRead: (id: string) => Promise<void>;
+  markAllNotificationsRead: () => Promise<void>;
   refreshData: () => Promise<void>;
 }
 
@@ -228,6 +235,43 @@ const mapApiReservationToReservation = (res: ApiReservation): Reservation => {
   };
 };
 
+function formatRelativeTime(dateString: string): string {
+  try {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffSec = Math.floor((now.getTime() - date.getTime()) / 1000);
+    if (diffSec < 60) return "Just now";
+    if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
+    if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
+    return date.toLocaleDateString("en-GB", { month: "short", day: "numeric" });
+  } catch {
+    return "Recently";
+  }
+}
+
+const mapApiNotificationToNotification = (item: BackendNotification): Notification => {
+  let type: "info" | "success" | "warning" = "info";
+  if (item.notification_type.includes("APPROVED") || item.notification_type.includes("SUCCESS")) {
+    type = "success";
+  } else if (item.notification_type.includes("ALERT") || item.notification_type.includes("REJECT") || item.notification_type.includes("SUSPEND")) {
+    type = "warning";
+  }
+
+  return {
+    id: String(item.id),
+    numericId: item.id,
+    type,
+    notificationType: item.notification_type,
+    title: item.title,
+    message: item.message,
+    time: formatRelativeTime(item.created_at),
+    read: item.is_read,
+    priority: item.priority,
+    actionUrl: item.action_url,
+    referenceType: item.reference_type,
+    referenceId: item.reference_id,
+  };
+};
 
 const CACHE_KEY = "pharmacy_app_cache";
 
@@ -279,11 +323,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setLoading(true);
       }
 
-      // Concurrently fetch User, Pharmacy Profile, and Reservations
-      const [meRes, pharmacyRes, resListRes] = await Promise.allSettled([
+      // Concurrently fetch User, Pharmacy Profile, Reservations, and Notifications
+      const [meRes, pharmacyRes, resListRes, notifsRes] = await Promise.allSettled([
         api.getMe(),
         api.getMyPharmacy(),
         api.getPharmacyReservations(),
+        api.getNotifications(),
       ]);
 
       if (meRes.status === "rejected") {
@@ -330,6 +375,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setReservations(fetchedReservations);
       }
 
+      if (notifsRes.status === "fulfilled") {
+        setNotifications((notifsRes.value.items || []).map(mapApiNotificationToNotification));
+      }
+
       saveCache({
         user: userData,
         profile: pharmacyProfile,
@@ -366,6 +415,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setLoading(false);
     }
   }, [loadBackendData]);
+
+  // Periodic notification polling every 25 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const token = getToken();
+      if (token) {
+        api.getNotifications()
+          .then((res) => {
+            setNotifications((res.items || []).map(mapApiNotificationToNotification));
+          })
+          .catch(() => {});
+      }
+    }, 25000);
+    return () => clearInterval(interval);
+  }, []);
 
   const login = async (email: string, password?: string): Promise<boolean> => {
     try {
@@ -654,8 +718,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setProfile((prev) => ({ ...prev, ...updatedFields }));
   };
 
-  const markNotificationRead = (id: string) => {
+  const markNotificationRead = async (id: string) => {
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+    const numericId = Number(id);
+    if (!isNaN(numericId)) {
+      try {
+        await api.markNotificationRead(numericId);
+      } catch (err) {
+        console.error("Failed to mark notification read on backend:", err);
+      }
+    }
+  };
+
+  const markAllNotificationsRead = async () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    try {
+      await api.markAllNotificationsRead();
+    } catch (err) {
+      console.error("Failed to mark all notifications read on backend:", err);
+    }
   };
 
   return (
@@ -678,6 +759,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         markCashPaid,
         updateProfile,
         markNotificationRead,
+        markAllNotificationsRead,
         refreshData: loadBackendData,
       }}
     >

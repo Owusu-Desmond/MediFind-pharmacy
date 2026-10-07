@@ -5,7 +5,7 @@ import { useApp } from "@/context/AppContext";
 import { Bell, Search, Power, Check, X, ShieldAlert } from "lucide-react";
 
 export default function Header() {
-  const { profile, updateProfile, notifications, markNotificationRead } = useApp();
+  const { profile, updateProfile, notifications, markNotificationRead, markAllNotificationsRead } = useApp();
   const [showNotifications, setShowNotifications] = useState(false);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
@@ -55,7 +55,7 @@ export default function Header() {
             <Bell size={20} />
             {unreadCount > 0 && (
               <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center animate-pulse">
-                {unreadCount}
+                {unreadCount > 9 ? "9+" : unreadCount}
               </span>
             )}
           </button>
@@ -67,19 +67,29 @@ export default function Header() {
                 className="fixed inset-0 z-40"
                 onClick={() => setShowNotifications(false)}
               />
-              <div className="absolute right-0 mt-3 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 py-3 animate-in fade-in-50 slide-in-from-top-2 duration-150">
+              <div className="absolute right-0 mt-3 w-88 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 py-3 animate-in fade-in-50 slide-in-from-top-2 duration-150 w-96">
                 <div className="px-4 pb-2 border-b border-slate-100 flex items-center justify-between">
-                  <h3 className="font-bold text-sm text-slate-800">Notifications</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-sm text-slate-800">Notifications</h3>
+                    {unreadCount > 0 && (
+                      <span className="text-[10px] bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-bold">
+                        {unreadCount} new
+                      </span>
+                    )}
+                  </div>
                   {unreadCount > 0 && (
-                    <span className="text-xs font-semibold text-primary">
-                      {unreadCount} unread
-                    </span>
+                    <button
+                      onClick={() => markAllNotificationsRead()}
+                      className="text-xs font-semibold text-primary hover:underline"
+                    >
+                      Mark all read
+                    </button>
                   )}
                 </div>
 
-                <div className="max-h-72 overflow-y-auto mt-2">
+                <div className="max-h-80 overflow-y-auto mt-2 divide-y divide-slate-50">
                   {notifications.length === 0 ? (
-                    <div className="p-6 text-center text-slate-400 text-xs">
+                    <div className="p-8 text-center text-slate-400 text-xs">
                       No notifications yet
                     </div>
                   ) : (
@@ -87,7 +97,7 @@ export default function Header() {
                       <div
                         key={n.id}
                         className={`px-4 py-3 flex gap-3 hover:bg-slate-50 transition-colors relative ${
-                          !n.read ? "bg-teal-50/30" : ""
+                          !n.read ? "bg-teal-50/20" : ""
                         }`}
                       >
                         <div className="flex-1">
@@ -99,15 +109,27 @@ export default function Header() {
                               {n.time}
                             </span>
                           </div>
-                          <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">
+                          <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
                             {n.message}
                           </p>
+                          {n.actionUrl && (
+                            <a
+                              href={n.actionUrl}
+                              onClick={() => {
+                                markNotificationRead(n.id);
+                                setShowNotifications(false);
+                              }}
+                              className="text-[11px] font-bold text-teal-700 hover:underline mt-1.5 inline-block"
+                            >
+                              View Details →
+                            </a>
+                          )}
                         </div>
                         {!n.read && (
                           <button
                             onClick={() => markNotificationRead(n.id)}
                             title="Mark as read"
-                            className="w-5 h-5 rounded-full hover:bg-slate-200 flex items-center justify-center text-primary shrink-0 self-center"
+                            className="w-6 h-6 rounded-full hover:bg-slate-200 flex items-center justify-center text-primary shrink-0 self-center"
                           >
                             <Check size={14} className="stroke-[2.5]" />
                           </button>
